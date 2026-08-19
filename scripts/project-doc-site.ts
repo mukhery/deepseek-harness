@@ -13,7 +13,7 @@ import { fromMarkdown } from 'mdast-util-from-markdown'
 import { gfmFromMarkdown } from 'mdast-util-gfm'
 import { gfm } from 'micromark-extension-gfm'
 import type { Nodes } from 'mdast'
-import { docsPages, type DocsLocale, type DocsPage } from '../website/docs.ts'
+import { docsPages, type DocsPage } from '../website/docs.ts'
 
 const REPOSITORY_URL = 'https://github.com/deepseek-ai/deepseek-harness'
 const root = resolve(import.meta.dirname, '..')
@@ -44,7 +44,6 @@ type RewritableNode = Extract<Nodes, { type: 'link' | 'image' | 'definition' }>
 
 /** Inputs for rewriting one canonical Markdown page. */
 export interface RewriteMarkdownOptions {
-  locale: DocsLocale
   sourcePath: string
   route: string
   pages: DocsPage[]
@@ -166,25 +165,17 @@ function routeTarget(fromRoute: string, toRoute: string, suffix: string): string
   return `${target.startsWith('.') ? target : `./${target}`}${suffix}`
 }
 
-function sourceMap(pages: DocsPage[]): Map<string, Map<DocsLocale, DocsPage>> {
-  const map = new Map<string, Map<DocsLocale, DocsPage>>()
+function sourceMap(pages: DocsPage[]): Map<string, DocsPage> {
+  const map = new Map<string, DocsPage>()
   for (const page of pages) {
     for (const source of [page.source, ...(page.sourceAliases ?? [])]) {
-      const localized = map.get(source) ?? new Map<DocsLocale, DocsPage>()
-      if (localized.has(page.locale)) {
-        throw new Error(`project-doc-site: duplicate source or alias ${JSON.stringify(source)} for locale ${JSON.stringify(page.locale)}.`)
+      if (map.has(source)) {
+        throw new Error(`project-doc-site: duplicate source or alias ${JSON.stringify(source)}.`)
       }
-      localized.set(page.locale, page)
-      map.set(source, localized)
+      map.set(source, page)
     }
   }
   return map
-}
-
-function counterpartSource(source: string): string {
-  return source.endsWith('.zh.md')
-    ? source.replace(/\.zh\.md$/, '.md')
-    : source.replace(/\.md$/, '.zh.md')
 }
 
 function resolveRepositoryTarget(sourceAbs: string, rawPath: string, repoRoot: string): { absPath: string; line?: number } {
@@ -244,11 +235,7 @@ export function rewriteMarkdown(source: string, options: RewriteMarkdownOptions)
     if (path === '') return
     const { absPath, line } = resolveRepositoryTarget(sourceAbs, path, options.repoRoot)
     const targetPath = repoPath(absPath, options.repoRoot)
-    const isLanguageSwitcher = targetPath === counterpartSource(options.sourcePath)
-    const targetLocale: DocsLocale = isLanguageSwitcher
-      ? options.locale === 'root' ? 'en' : 'root'
-      : options.locale
-    const page = published.get(targetPath)?.get(targetLocale)
+    const page = published.get(targetPath)
     const nextUrl = page !== undefined
       ? routeTarget(options.route, page.route, suffix)
       : node.type === 'image' && options.placeImage !== undefined
@@ -302,30 +289,20 @@ export function addProjectionFrontmatter(markdown: string, page: Pick<DocsPage, 
   return `---\n${fields}\n---\n\n${markdown}`
 }
 
-/** The switcher line a canonical page carries so its GitHub reader can reach the other language. */
-const LANGUAGE_SWITCHER = /^(?:English \| \[中文\]\([^)]*\)|\[English\]\([^)]*\) \| 中文)$/
-
 /** The repository badge a canonical page carries for its GitHub reader. */
 const REPOSITORY_BADGE = /^\[!\[[^\]]*\]\(https:\/\/img\.shields\.io\/[^)]*\)\]\([^)]*\)$/
 
 /**
- * Drop the lines that address a canonical page's GitHub reader.
+ * Drop the line that addresses a canonical page's GitHub reader.
  *
- * The site carries a locale switcher in its navigation bar and links the
- * repository from every page, so projecting these lines would repeat both — the
- * switcher as the first element under each heading.
+ * The site links the repository from every page's edit link, so projecting
+ * the badge would repeat it.
  *
  * @param markdown Rewritten canonical Markdown content.
- * @returns The content without the switcher line or the repository badge.
+ * @returns The content without the repository badge.
  */
 function withoutRepositoryChrome(markdown: string): string {
   const lines = markdown.split('\n')
-  const switcher = lines.findIndex(line => LANGUAGE_SWITCHER.test(line))
-  // Only the switcher introducing the page qualifies; further down the same
-  // text is prose or a sample rather than the page's own header.
-  if (switcher !== -1 && switcher < 8) {
-    lines.splice(switcher, lines[switcher + 1] === '' ? 2 : 1)
-  }
   const badge = lines.findLastIndex(line => REPOSITORY_BADGE.test(line))
   if (badge !== -1) {
     lines.splice(lines[badge - 1] === '' ? badge - 1 : badge, lines[badge - 1] === '' ? 2 : 1)
@@ -338,17 +315,17 @@ function withoutRepositoryChrome(markdown: string): string {
  *
  * @param markdown Rewritten canonical Markdown content.
  * @param page Publication manifest entry for the content.
- * @returns Full Markdown for ordinary pages or frontmatter-only Markdown for a locale home page.
+ * @returns Full Markdown for ordinary pages or frontmatter-only Markdown for a site home page.
  */
 export function projectedPageContent(markdown: string, page: DocsPage): string {
   if (page.sidebar !== null) return withoutRepositoryChrome(markdown)
   if (!markdown.startsWith('---\n')) {
-    throw new Error(`project-doc-site: locale home source ${JSON.stringify(page.source)} must start with YAML frontmatter.`)
+    throw new Error(`project-doc-site: site home source ${JSON.stringify(page.source)} must start with YAML frontmatter.`)
   }
   const closingDelimiter = '\n---\n'
   const closing = markdown.indexOf(closingDelimiter, 4)
   if (closing === -1) {
-    throw new Error(`project-doc-site: locale home source ${JSON.stringify(page.source)} has unclosed YAML frontmatter.`)
+    throw new Error(`project-doc-site: site home source ${JSON.stringify(page.source)} has unclosed YAML frontmatter.`)
   }
   return markdown.slice(0, closing + closingDelimiter.length)
 }
@@ -380,7 +357,6 @@ function referencedImages(): string[] {
     if (!existsSync(sourceAbs)) continue
     rewriteMarkdown(readFileSync(sourceAbs, 'utf8'), {
       sourcePath: page.source,
-      locale: page.locale,
       route: page.route,
       pages: docsPages,
       repoRoot: root,
@@ -440,7 +416,6 @@ export function projectDocs(): void {
     const markdown = readFileSync(sourceAbs, 'utf8')
     const projected = rewriteMarkdown(markdown, {
       sourcePath: page.source,
-      locale: page.locale,
       route: page.route,
       pages: docsPages,
       repoRoot: root,
@@ -453,9 +428,7 @@ export function projectDocs(): void {
             + ' which is not a regular file inside the repository.',
           )
         }
-        // Beside the page that references it, under its own basename: each
-        // locale's route tree gets its own copy, so one relative URL is correct
-        // from both.
+        // Beside the page that references it, under its own basename.
         const name = basename(real)
         const target = resolve(dirname(output), name)
         claim(target, real)

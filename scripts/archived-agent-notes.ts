@@ -94,7 +94,7 @@ function pairMeta(content: string): Map<string, string> | undefined {
   return entries
 }
 
-function validateHeader(path: string, content: Buffer, sourceBase: string, chinese: boolean): string[] {
+function validateHeader(path: string, content: Buffer, sourceBase: string, switcher: string | undefined): string[] {
   const errors: string[] = []
   const lines = content.toString('utf8').split('\n')
   if (!/^# Agent Note: \S/.test(lines[0] ?? '')) errors.push(`${path}: line 1 must be \`# Agent Note: <title>\``)
@@ -107,14 +107,19 @@ function validateHeader(path: string, content: Buffer, sourceBase: string, chine
     errors.push(`${path}: archive date ${archived} predates the note filename`)
   }
   if (lines[4] !== '') errors.push(`${path}: line 5 must be blank`)
-  const switcher = chinese
-    ? `[English](${sourceBase}.md) | 中文`
-    : `English | [中文](${sourceBase}.zh.md)`
-  if (lines[5] !== switcher) errors.push(`${path}: line 6 must be ${JSON.stringify(switcher)}`)
+  if (switcher !== undefined && lines[5] !== switcher) errors.push(`${path}: line 6 must be ${JSON.stringify(switcher)}`)
   return errors
 }
 
-/** Validate the closed kind tree, implemented/archive headers, and complete bilingual triplets. */
+/**
+ * Validate the closed kind tree and implemented/archive headers.
+ *
+ * A key with only a `.md` file is an English-only archived note (this
+ * repository's current policy). A key with all three of `.md`, `.zh.md`, and
+ * `.i18n.yaml` is a legacy bilingual triplet, sealed before the bilingual
+ * documentation policy was dropped; its pairing is still validated exactly as
+ * it was when sealed. Any other combination is incomplete.
+ */
 export function validateArchiveArtifacts(artifacts: ReadonlyMap<string, Buffer>): string[] {
   const errors: string[] = []
   const triplets = new Map<string, Triplet>()
@@ -141,6 +146,13 @@ export function validateArchiveArtifacts(artifacts: ReadonlyMap<string, Buffer>)
     const zhPath = `${key}.zh.md`
     const metaPath = `${key}.i18n.yaml`
     const { source, zh, meta } = triplet
+    const sourceBase = basename(key)
+
+    if (source !== undefined && zh === undefined && meta === undefined) {
+      errors.push(...validateHeader(sourcePath, source, sourceBase, undefined))
+      continue
+    }
+
     const missing = [
       source === undefined ? sourcePath : undefined,
       zh === undefined ? zhPath : undefined,
@@ -150,9 +162,8 @@ export function validateArchiveArtifacts(artifacts: ReadonlyMap<string, Buffer>)
       errors.push(`${key}: incomplete archived triplet; missing ${missing.join(', ')}`)
       continue
     }
-    const sourceBase = basename(key)
-    errors.push(...validateHeader(sourcePath, source, sourceBase, false))
-    errors.push(...validateHeader(zhPath, zh, sourceBase, true))
+    errors.push(...validateHeader(sourcePath, source, sourceBase, `English | [中文](${sourceBase}.zh.md)`))
+    errors.push(...validateHeader(zhPath, zh, sourceBase, `[English](${sourceBase}.md) | 中文`))
     const sourceDate = /^Archived: (\d{4}-\d{2}-\d{2})$/m.exec(source.toString('utf8'))?.[1]
     const zhDate = /^Archived: (\d{4}-\d{2}-\d{2})$/m.exec(zh.toString('utf8'))?.[1]
     if (sourceDate !== undefined && zhDate !== undefined && sourceDate !== zhDate) {

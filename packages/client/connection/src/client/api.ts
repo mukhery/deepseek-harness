@@ -32,7 +32,7 @@ export {
   SESSION_SEARCH_RESULT_LIMIT,
   transportError,
 } from '@deepseek-ai/dsh-host-apiproxy/api'
-export { AbstractApiClient } from '@deepseek-ai/dsh-host-apiproxy/client'
+export { AbstractApiClient, randomUuid } from '@deepseek-ai/dsh-host-apiproxy/client'
 export type { IApiClient } from '@deepseek-ai/dsh-host-apiproxy/client'
 export type { SessionId, SessionEvent } from '@deepseek-ai/dsh-session/types'
 export type { MessageId } from '@deepseek-ai/dsh-llm/brand'

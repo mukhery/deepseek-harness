@@ -2,8 +2,6 @@
 
 Status: implemented
 
-English | [中文](2026-08-09-committed-artifact-citations.zh.md)
-
 ## Problem
 
 Large design and review sessions leave working shorthand — decision ordinals, audit item codes, plan section numbers, task and stack ordinals, reviewer rulings — that reads naturally while the session transcript is open and resolves to nothing after it closes. A repo-wide audit found the pattern concentrated in `packages/client`: bare `(decision 12/16/19/20/21)` citations of which only decision 21 had a committed owner, `(audit C2/S1/S3/S7)` codes with no audit document anywhere, `design §4.7` / `web2 §0` / `plan §1.4` references to uncommitted drafts, plan-phase labels (`T2/T5/T9`, `P-I`, `W5`), stack positions ("a later PR in this stack") in durable JSDoc, and "ruling" / "design ledger" vocabulary. The same families appeared in tests, CSS comments, generator templates, CI comments, and Agent Notes ("this PR/branch/review round" vantage, review-choreography attributions, stale "deferred to a later PR" claims whose targets had since shipped). The [documentation standard](../../../../docs/AGENTS.md) already banned the change-history half (previously/now, PR and commit references) but stated no counterpart rule for citations, so unresolvable ordinals kept landing.
@@ -28,7 +26,7 @@ One repo-wide purge applied these rules across the prose surfaces, including the
 
 ## Verification
 
-The audit's grep batteries (English and Chinese, comments and prose, `--hidden` for `.agents/`) return no design-ordinal citations outside recorded fixtures, archived notes, the trim skill's own files, and this note's quoted evidence; `verify-type-equiv`, the `gen-*` freshness checks, and `verify-translation-pairing` pin the regenerated and re-recorded surfaces. Coverage gap: no gate rejects a new ordinal citation — review owns the rule.
+The audit's grep batteries (comments and prose, `--hidden` for `.agents/`) return no design-ordinal citations outside recorded fixtures, archived notes, the trim skill's own files, and this note's quoted evidence; `verify-type-equiv` and the `gen-*` freshness checks pin the regenerated surfaces. Coverage gap: no gate rejects a new ordinal citation — review owns the rule.
 
 ## Consequences
 

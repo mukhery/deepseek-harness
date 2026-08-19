@@ -33,6 +33,11 @@ describe('archived Agent Notes', () => {
     expect(validateArchiveArtifacts(fixture())).toEqual([])
   })
 
+  it('accepts an English-only archived note with no zh/meta sidecars', () => {
+    const source = Buffer.from('# Agent Note: Example\n\nStatus: implemented\nArchived: 2026-07-26\n\n## Problem\n\nExample.\n')
+    expect(validateArchiveArtifacts(new Map([['process/2026-07-26-example.md', source]]))).toEqual([])
+  })
+
   it('rejects incomplete triplets and invalid archive headers', () => {
     const artifacts = fixture()
     artifacts.delete('process/2026-07-26-example.i18n.yaml')

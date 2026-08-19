@@ -13,6 +13,9 @@ import { RpcId } from '../api/rpc.ts'
 import type { Wire } from '../api/rpc.schema.ts'
 import { rpcReceiptSchema, serverRequestSchema, serverResponseSchema } from '../api/rpc.schema.ts'
 import { hostFrameSchema, muxFrameSchema } from '../api/events.schema.ts'
+import { randomUuid } from './random-uuid.ts'
+
+export { randomUuid } from './random-uuid.ts'
 import {
   hostCreateDirectoryValueSchema, hostDescribeValueSchema,
   hostListDirectoryValueSchema, hostOpenPathValueSchema, hostPickDirectoryValueSchema,
@@ -296,8 +299,9 @@ export abstract class AbstractApiClient implements IApiClient {
   }
 
   protected mintRpcId(): RpcId {
-    // crypto.randomUUID is a Web API (browser + Node ≥19): keeps this base platform-neutral.
-    return RpcId(crypto.randomUUID())
+    // randomUuid uses crypto.getRandomValues, not crypto.randomUUID: the latter requires a
+    // secure context (HTTPS or localhost), which excludes plain-HTTP LAN/remote access.
+    return RpcId(randomUuid())
   }
 
   /**
