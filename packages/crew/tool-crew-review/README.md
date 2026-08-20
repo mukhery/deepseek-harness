@@ -1,6 +1,6 @@
 # @deepseek-ai/dsh-tool-crew-review
 
-Model-facing `crew_verdict` tool over [`ctx.crew`](../crew/README.md) — the **sole** operation that can close a crew ticket. Registered as an ordinary deployment-level plugin; only a hired `reviewer`'s `toolFilter` (set by `tool-crew-director`'s `crew_hire`) actually exposes it, so no other role can call it even though the tool is globally registered.
+Model-facing `crew_verdict` tool over [`ctx.crew`](../crew/README.md) — the **sole** operation that can close a crew ticket. Mounted inside the `crew-director` preset (never host-global, for the same reason as `tool-crew-member`). The Director's own session technically sees it too; the real enforcement is `ctx.crew.verdict` itself checking the caller was hired into the `reviewer` role, not tool visibility (see [`ctx.crew`'s README](../crew/README.md)) — a hired `reviewer` child's `toolFilter` (set by `tool-crew-director`'s `crew_hire`) is what actually narrows this tool down to the intended caller in practice.
 
 ## `crew_verdict`
 

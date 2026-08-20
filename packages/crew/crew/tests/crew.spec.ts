@@ -79,6 +79,20 @@ describe('CrewRuntime roster and tickets', () => {
     expect(reopened.evidence).toBeUndefined()
   })
 
+  it('rejects a verdict from a caller not hired as reviewer', async () => {
+    const { crew } = await harness()
+    const member = SessionId('engineer-1')
+    const impostor = SessionId('engineer-2')
+    await crew.hire({ workspaceId: workspace, memberSessionId: member, role: 'engineer', label: 'Engineer' })
+    await crew.hire({ workspaceId: workspace, memberSessionId: impostor, role: 'engineer', label: 'Impostor' })
+    const ticket = await crew.openTicket({
+      workspaceId: workspace, title: 'Ship X', objective: 'Ship X', role: 'engineer',
+    })
+    await crew.assignTicket(ticket.id, member)
+    await crew.submitForReview(ticket.id, member, 'evidence', 'summary')
+    await expect(crew.verdict(ticket.id, impostor, 'accept', 'looks good')).rejects.toThrow(CrewAuthorityError)
+  })
+
   it('blocks a working ticket and reassigns it once resolved', async () => {
     const { crew } = await harness()
     const member = SessionId('engineer-1')

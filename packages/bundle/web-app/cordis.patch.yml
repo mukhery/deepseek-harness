@@ -73,6 +73,15 @@
     - id: workspace
       name: '@deepseek-ai/dsh-workspace'
 
+    # Crew roster/ticket-ledger/message-pool domain, keyed by the workspace
+    # row above. Registers no tool, prompt, or schema of its own (see
+    # dsh-crew's README Model Experience section), so mounting it here for
+    # every session is safe — unlike its model-facing tool packages, which
+    # stay preset-scoped (crew-director) precisely because a host-global tool
+    # row would leak into every OTHER preset's catalog too.
+    - id: crew
+      name: '@deepseek-ai/dsh-crew'
+
     - id: session-projection-cache
       name: '@deepseek-ai/dsh-session-projection-cache'
       config:

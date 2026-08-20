@@ -240,6 +240,7 @@
         "./packages/compaction/*/src",
         "./packages/context/*/src",
         "./packages/goal/*/src",
+        "./packages/crew/*/src",
         "./packages/feedback/*/src",
         "./packages/schedule/*/src",
         "./packages/guard/*/src",

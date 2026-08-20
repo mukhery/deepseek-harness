@@ -98,7 +98,10 @@ async reassignTicket(ticketId: CrewTicketId, memberSessionId: SessionId): Promis
  * the same call, so the ledger's `done` state and its PR fact commit
  * together. A `reject` returns the ticket directly to `assigned` for the
  * same assignee with the rationale attached as new context, rather than
- * resting in a separate terminal status.
+ * resting in a separate terminal status. The caller must be hired into the
+ * `reviewer` role — this check lives here, not only in which tool a
+ * deployment happens to expose, so a role misconfiguration cannot grant
+ * verdict authority.
  * @param ticketId - Ticket to verdict.
  * @param reviewerSessionId - Reviewer session recording the verdict.
  * @param outcome - `accept` closes the ticket; `reject` reopens it.

@@ -1,6 +1,6 @@
 # @deepseek-ai/dsh-tool-crew-director
 
-Model-facing `crew_hire`, `crew_open_ticket`, `crew_assign_ticket`, and `crew_board` tools over [`ctx.crew`](../crew/README.md) and `ctx.subagents`. Registered as an ordinary deployment-level plugin — like the other crew tool packages, it does not gate itself to one preset. What actually exposes these to a session is composition: the `crew-director` preset mounts this package unrestricted, and a hired `strategist` additionally receives `crew_open_ticket` through its own `toolFilter` (see `crew_hire` below), without needing a second copy of this package or a separate tool.
+Model-facing `crew_hire`, `crew_open_ticket`, `crew_assign_ticket`, and `crew_board` tools over [`ctx.crew`](../crew/README.md) and `ctx.subagents`. Mounted inside the `crew-director` preset — never host-global, unlike `ctx.crew` itself: a host-global tool row is visible to every session on every preset, so these would otherwise leak onto `standard`/`minimal`/`code`/`cordis` too. A hired `strategist` additionally receives `crew_open_ticket` through its own `toolFilter` (see `crew_hire` below) rather than needing a second copy of this package or a separate tool.
 
 ## `crew_hire`
 

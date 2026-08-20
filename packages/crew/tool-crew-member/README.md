@@ -1,6 +1,6 @@
 # @deepseek-ai/dsh-tool-crew-member
 
-Model-facing `crew_report`, `crew_publish`, and `crew_read_pool` tools over [`ctx.crew`](../crew/README.md). Registered as an ordinary deployment-level plugin; a hired crew member's visibility into these three tools is decided entirely by the `toolFilter.allow` list `tool-crew-director`'s `crew_hire` sets at hire time, not by a separate preset composition for this package.
+Model-facing `crew_report`, `crew_publish`, and `crew_read_pool` tools over [`ctx.crew`](../crew/README.md). Mounted inside the `crew-director` preset (never host-global — a host-global row would put these on every other preset's tool catalog too). A hired crew member's actual visibility into these three tools is narrowed by the `toolFilter.allow` list `tool-crew-director`'s `crew_hire` sets at hire time.
 
 ## `crew_report`
 
