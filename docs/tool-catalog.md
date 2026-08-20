@@ -25,6 +25,9 @@ This table connects model-visible tool names to the plugin package and service s
 | `@deepseek-ai/dsh-tool-str-replace-editor` | `str_replace_editor` | `ctx.tools`, `ctx.fs` | `tool/call`, `fs/observed after view presence/absence, edit absence, or successful mutation`, `tool/result` | - | Standalone view/create/unique literal replace/line insert tool over the filesystem seam; it composes with any shell or terminal API. |
 | `@deepseek-ai/dsh-tool-fs` | `edit`, `read`, `read_image`, `write` | `ctx.tools`, `ctx.fs`, `ctx.systemPrompt`, `ctx.attachments (read_image registration)`, `ctx.llm + an image-capable route (read_image execution)` | `tool/call`, `fs/write-intent or fs/edit-intent for mutations`, `fs/observed after read presence/absence or successful file operation`, `durable attachment (read_image)`, `tool/result` | - | The read-before-write/edit policy is added by `@deepseek-ai/dsh-fs-observation-policy` (an `fs/*` event-gate plugin, no schema change); a deployment that loads these tools is expected to also load it. `read_image` is not registered without `ctx.attachments`; its schema is route-independent, and execution refuses unless the exact routed model declares image input. |
 | `@deepseek-ai/dsh-tool-fs-search` | `glob`, `grep` | `ctx.tools`, `ctx.subprocess`, `ctx.systemPrompt` | `tool/call`, `tool/result` | - | glob and grep are unconditional discovery tools that spawn the packaged ripgrep binary (`@vscode/ripgrep`) through ctx.subprocess as ordinary foreground calls (never background jobs) — no host `rg` install and no shell layer. The catalog uses `sampleOverCapGlobResults: true`; deployments must choose that behavior explicitly. Capped results save the complete formatted list through the optional ctx.spillStore backend; returned locators are follow-up-readable/searchable when the backend exposes local paths in co-located deployments. |
+| `@deepseek-ai/dsh-tool-crew-director` | `crew_assign_ticket`, `crew_board`, `crew_hire`, `crew_open_ticket` | `ctx.tools`, `ctx.crew`, `ctx.subagents`, `ctx.workspaceRegistry`, `a calling Agent with a workspace-registered cwd` | `tool/call`, `crew domain roster/ticket records for mutations`, `tool/result` | - | crew_hire delivers each hired role's identity inline through SubagentStartRequest.persona/toolFilter, not a preset; crew_assign_ticket also delivers the ticket objective as the member's next turn through ctx.subagents.followup. |
+| `@deepseek-ai/dsh-tool-crew-member` | `crew_publish`, `crew_read_pool`, `crew_report` | `ctx.tools`, `ctx.crew`, `ctx.workspaceRegistry`, `a calling Agent with a workspace-registered cwd` | `tool/call`, `crew domain ticket/message records for mutations`, `tool/result` | - | crew_report never sets a ticket done; only dsh-tool-crew-review's crew_verdict does. |
+| `@deepseek-ai/dsh-tool-crew-review` | `crew_verdict` | `ctx.tools`, `ctx.crew`, `a calling Agent` | `tool/call`, `crew domain ticket records for mutations`, `tool/result` | - | crew_verdict is the sole path that can set a ticket done; a deployment exposes it only through a hired reviewer's toolFilter. |
 | `@deepseek-ai/dsh-tool-terminal` | `terminal_close`, `terminal_list`, `terminal_open`, `terminal_read`, `terminal_send`, `terminal_signal` | `ctx.tools`, `ctx.terminals`, `ctx.systemPrompt`, `ctx.jobs at call time for run_in_background` | `tool/call`, `tool/result` | - | The six terminal tools are opt-in and complement one-shot shell/filesystem tools. `terminal_send(run_in_background: true)` registers with `ctx.jobs`; TUI, named key sequences, BEL, resize, auto-start, and cross-agent sharing are absent from the schema. |
 | `@deepseek-ai/dsh-tool-goal` | `create_goal`, `get_goal`, `update_goal` | `ctx.tools`, `ctx.agents`, `ctx.goals`, `ctx.systemPrompt`, `a calling Agent in an authorized open turn` | `tool/call`, `goal/change for mutations`, `tool/result` | - | create, edit, pause, and resume require direct-human root authority; complete and blocked also accept the exact current goal round. The default blocked lower bound is three admitted rounds. |
 | `@deepseek-ai/dsh-schedule` | `schedule_create`, `schedule_delete`, `schedule_list` | `ctx.tools`, `ctx.sessions`, `Session persistence`, `a future live root Agent` | `tool/call`, `schedule/change create or delete`, `tool/result` | - | Registered only inside live root Agent scopes created after the opt-in Schedule plugin loads. Version 1 accepts after_seconds, explicit absolute at, and bounded fixed-rate every_seconds, and discloses session-local delivery; management reads and mutations require the shared Session persistence barrier. |
@@ -772,6 +775,286 @@ Search file contents with a ripgrep regular expression. Returns matching lines w
 Source: [`packages/fs/tool-fs-search/src/index.ts`](../packages/fs/tool-fs-search/src/index.ts)
 
 glob and grep are unconditional discovery tools that spawn the packaged ripgrep binary (`@vscode/ripgrep`) through ctx.subprocess as ordinary foreground calls (never background jobs) — no host `rg` install and no shell layer. The catalog uses `sampleOverCapGlobResults: true`; deployments must choose that behavior explicitly. Capped results save the complete formatted list through the optional ctx.spillStore backend; returned locators are follow-up-readable/searchable when the backend exposes local paths in co-located deployments.
+
+<a id="deepseek-aidsh-tool-crew-director"></a>
+
+## `@deepseek-ai/dsh-tool-crew-director`
+
+### `crew_assign_ticket`
+
+Assign an open ticket to a roster member hired into the ticket's role, and deliver the ticket's objective as that member's next turn.
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "ticket_id": {
+      "type": "string",
+      "description": "Ticket to assign."
+    },
+    "member_session_id": {
+      "type": "string",
+      "description": "Roster member to assign it to."
+    }
+  },
+  "required": [
+    "ticket_id",
+    "member_session_id"
+  ]
+}
+```
+
+Source: [`packages/crew/tool-crew-director/src/index.ts`](../packages/crew/tool-crew-director/src/index.ts)
+
+### `crew_board`
+
+Read the crew's current roster and full ticket board for this workspace.
+
+```json
+{
+  "type": "object",
+  "properties": {}
+}
+```
+
+Source: [`packages/crew/tool-crew-director/src/index.ts`](../packages/crew/tool-crew-director/src/index.ts)
+
+### `crew_hire`
+
+Hire a new crew member into a fixed role (researcher, strategist, engineer, or reviewer). This only establishes the member; assign it a ticket separately with crew_assign_ticket.
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "role": {
+      "type": "string",
+      "description": "researcher | strategist | engineer | reviewer",
+      "enum": [
+        "researcher",
+        "strategist",
+        "engineer",
+        "reviewer"
+      ]
+    },
+    "label": {
+      "type": "string",
+      "description": "Durable display label, e.g. \"Researcher — pricing\"."
+    }
+  },
+  "required": [
+    "role",
+    "label"
+  ]
+}
+```
+
+Source: [`packages/crew/tool-crew-director/src/index.ts`](../packages/crew/tool-crew-director/src/index.ts)
+
+### `crew_open_ticket`
+
+Open a new crew ticket, unassigned. Assign it separately with crew_assign_ticket.
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "title": {
+      "type": "string",
+      "description": "Short human-facing title."
+    },
+    "objective": {
+      "type": "string",
+      "description": "The objective delivered to whoever is assigned."
+    },
+    "role": {
+      "type": "string",
+      "description": "Role this ticket is scoped to.",
+      "enum": [
+        "researcher",
+        "strategist",
+        "engineer",
+        "reviewer"
+      ]
+    },
+    "cites_message_ids": {
+      "type": "array",
+      "description": "Pool message ids this ticket is motivated by.",
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "required": [
+    "title",
+    "objective",
+    "role"
+  ]
+}
+```
+
+Source: [`packages/crew/tool-crew-director/src/index.ts`](../packages/crew/tool-crew-director/src/index.ts)
+
+crew_hire delivers each hired role's identity inline through SubagentStartRequest.persona/toolFilter, not a preset; crew_assign_ticket also delivers the ticket objective as the member's next turn through ctx.subagents.followup.
+
+<a id="deepseek-aidsh-tool-crew-member"></a>
+
+## `@deepseek-ai/dsh-tool-crew-member`
+
+### `crew_publish`
+
+Publish one structured message to the crew's shared message pool, so other crew members can find it without it being relayed through a coordinator. Use "finding" for research results, "decision" for a strategy call, "handoff" for cross-role context, and "blocker" for a shared obstacle.
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "topic": {
+      "type": "string",
+      "description": "Short topic string other members can filter by."
+    },
+    "kind": {
+      "type": "string",
+      "description": "finding | decision | handoff | blocker",
+      "enum": [
+        "finding",
+        "decision",
+        "handoff",
+        "blocker"
+      ]
+    },
+    "body": {
+      "type": "string",
+      "description": "The message content."
+    },
+    "cites_ticket_id": {
+      "type": "string",
+      "description": "Ticket this message relates to, if any."
+    }
+  },
+  "required": [
+    "topic",
+    "kind",
+    "body"
+  ]
+}
+```
+
+Source: [`packages/crew/tool-crew-member/src/index.ts`](../packages/crew/tool-crew-member/src/index.ts)
+
+### `crew_read_pool`
+
+Read the crew's shared message pool, oldest first. Optionally filter by exact-match topics and by a lower-bound publish time.
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "topics": {
+      "type": "array",
+      "description": "Exact-match topic allowlist.",
+      "items": {
+        "type": "string"
+      }
+    },
+    "since": {
+      "type": "string",
+      "description": "ISO-8601 instant; only messages at or after it are returned."
+    }
+  }
+}
+```
+
+Source: [`packages/crew/tool-crew-member/src/index.ts`](../packages/crew/tool-crew-member/src/index.ts)
+
+### `crew_report`
+
+Report on your currently assigned crew ticket. "ready_for_review" submits evidence and a summary for independent review — it does NOT close the ticket; only a reviewer's verdict does. "blocked" pauses the ticket pending resolution (typically a human decision).
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "ticket_id": {
+      "type": "string",
+      "description": "The ticket id you are reporting on."
+    },
+    "outcome": {
+      "type": "string",
+      "description": "ready_for_review | blocked",
+      "enum": [
+        "ready_for_review",
+        "blocked"
+      ]
+    },
+    "evidence": {
+      "type": "string",
+      "description": "Cited evidence; required with ready_for_review."
+    },
+    "summary": {
+      "type": "string",
+      "description": "Short closing summary; required with ready_for_review."
+    },
+    "reason": {
+      "type": "string",
+      "description": "Why the ticket cannot proceed; required with blocked."
+    }
+  },
+  "required": [
+    "ticket_id",
+    "outcome"
+  ]
+}
+```
+
+Source: [`packages/crew/tool-crew-member/src/index.ts`](../packages/crew/tool-crew-member/src/index.ts)
+
+crew_report never sets a ticket done; only dsh-tool-crew-review's crew_verdict does.
+
+<a id="deepseek-aidsh-tool-crew-review"></a>
+
+## `@deepseek-ai/dsh-tool-crew-review`
+
+### `crew_verdict`
+
+Independently verdict an in-review crew ticket. This is the ONLY way a ticket closes: accept sets it done (and, for an engineering ticket whose PR you already opened, attach that PR url so the ledger records it in the same call); reject returns it to the same assignee with your rationale as new context. The assignee's own report is not certification — form your own judgment from the cited evidence.
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "ticket_id": {
+      "type": "string",
+      "description": "The in-review ticket to verdict."
+    },
+    "outcome": {
+      "type": "string",
+      "description": "accept | reject",
+      "enum": [
+        "accept",
+        "reject"
+      ]
+    },
+    "rationale": {
+      "type": "string",
+      "description": "Your reasoning; always recorded on the ticket."
+    },
+    "pr_url": {
+      "type": "string",
+      "description": "Opened pull request url; only meaningful with accept."
+    }
+  },
+  "required": [
+    "ticket_id",
+    "outcome",
+    "rationale"
+  ]
+}
+```
+
+Source: [`packages/crew/tool-crew-review/src/index.ts`](../packages/crew/tool-crew-review/src/index.ts)
+
+crew_verdict is the sole path that can set a ticket done; a deployment exposes it only through a hired reviewer's toolFilter.
 
 <a id="deepseek-aidsh-tool-terminal"></a>
 

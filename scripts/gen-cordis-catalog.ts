@@ -62,6 +62,7 @@ export const SERVICE_PAGE: Record<string, string> = {
   e2b: 'subprocess.md',
   fs: 'filesystem.md',
   goals: 'goal.md',
+  crew: 'crew.md',
   webServer: 'web-server.md',
   invariants: 'invariants.md',
   llm: 'llm-streaming.md',
@@ -498,6 +499,15 @@ export const FOUNDATION_TYPE_NAMES: ReadonlySet<string> = new Set([
 /** Project types deliberately documented outside the subsystems catalog. */
 export const TYPE_LINK_EXEMPTIONS: Readonly<Record<string, string>> = {
   z: 'schemastery schema constructor is owned by vendor/schemastery (vendored upstream)',
+  CrewHireInput: 'ctx.crew input type is owned by packages/crew/crew/README.md',
+  CrewOpenTicketInput: 'ctx.crew input type is owned by packages/crew/crew/README.md',
+  CrewPublishInput: 'ctx.crew input type is owned by packages/crew/crew/README.md',
+  CrewReadPoolFilter: 'ctx.crew input type is owned by packages/crew/crew/README.md',
+  CrewRosterRecord: 'ctx.crew record type is owned by packages/crew/crew/README.md',
+  CrewTicketRecord: 'ctx.crew record type is owned by packages/crew/crew/README.md',
+  CrewMessageRecord: 'ctx.crew record type is owned by packages/crew/crew/README.md',
+  CrewTicketId: 'branded id is owned by packages/crew/crew/README.md',
+  CrewMessageId: 'branded id is owned by packages/crew/crew/README.md',
   BeginCommandRequest: 'event-local request contract is owned by packages/client/ui-input-trigger/src/types.ts',
   InsertReferenceRequest: 'event-local request contract is owned by packages/client/ui-input-trigger/src/types.ts',
   ConsumeTokenRequest: 'event-local request contract is owned by packages/client/ui-input-trigger/src/types.ts',

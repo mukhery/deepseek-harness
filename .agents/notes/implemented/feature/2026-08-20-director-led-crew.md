@@ -20,9 +20,15 @@ Concurrency safety for multiple simultaneous Director-preset sessions comes from
 
 The package's own invariant (`./invariant`) watches `domain/changed` for `crew`/`tickets` puts and fails loud if a landed ticket names an `assigneeSessionId` absent from that workspace's roster — the one cross-table relationship a direct domain write (bypassing `ctx.crew`) could otherwise violate silently.
 
-## Scope of this change
+## Role identity without per-role presets
 
-Only the domain service (`@deepseek-ai/dsh-crew`) ships in this change: `hire`/`roster`, the full ticket lifecycle, and `publish`/`readPool`. The model-facing tool packages (`tool-crew-director`, `tool-crew-member`, `tool-crew-review`), the five role presets, the escalation-thread mechanism, worktree/PR wiring, and the web client's workspace-scoped ticket board and PR panel are follow-up work described in the plan this note accompanies; they compose this service rather than changing it.
+The three model-facing tool packages ship in this change: `tool-crew-director` (`crew_hire`/`crew_open_ticket`/`crew_assign_ticket`/`crew_board`), `tool-crew-member` (`crew_report`/`crew_publish`/`crew_read_pool`), and `tool-crew-review` (`crew_verdict`). All three are ordinary deployment-level plugins — none is preset-scoped.
+
+The original plan called for five `agent-presets` directories, one per role. Reading `dsh-subagent`'s actual `SubagentStartRequest`/`startContinuable` contract during implementation showed this was unnecessary: a continuable child's role identity is already deliverable inline at hire time through `SubagentStartRequest.persona` (prose that shadows the deployment persona for that child alone) and `toolFilter.allow` (an allowlist restricting the child's visible tools). `tool-crew-director`'s `crew_hire` uses exactly this — a small in-package `ROLE_PERSONA`/`CREW_TOOLS_BY_ROLE` table, not a preset directory — so only the `crew-director` preset exists (for the standing and ad hoc Director threads, which are ordinary top-level sessions selected via `--profile`). A hired researcher, strategist, engineer, or reviewer never goes through preset composition at all. `Config.roleToolAllow` lets a deployment union additional tool names (its own `web_search`/`bash`-equivalent names, which vary by deployment) onto each role's fixed crew-tool allowlist.
+
+`crew_verdict`'s exclusivity is defense in depth, not the only gate: `ctx.crew.verdict` is already the sole service method that can set `done` (see Decision above), and a hired non-reviewer's `toolFilter` additionally never names `crew_verdict`, so the tool is not even schema-visible to it.
+
+The escalation-thread mechanism, worktree/PR wiring, and the web client's workspace-scoped ticket board and PR panel remain follow-up work described in the plan this note accompanies.
 
 ## Alternatives considered
 
@@ -34,6 +40,8 @@ Only the domain service (`@deepseek-ai/dsh-crew`) ships in this change: `hire`/`
 
 **A `rejected` resting ticket status, matching the plan's original six-state sketch.** Rejected during implementation: nothing in the design ever transitions a ticket *out of* `rejected` through a distinct action — the plan's own narrative ("reject reopens the ticket... with the rationale as new context") describes an immediate, atomic reopen. Modeling that as status `assigned` plus a `verdictRationale` field avoids a state with no reachable exit.
 
+**Five `agent-presets` directories, one per crew role (the original plan).** Rejected once `dsh-subagent`'s actual continuable-child contract was read: `SubagentStartRequest.persona`/`toolFilter` already deliver per-child identity and tool scope inline at hire time, which is strictly simpler than composing and maintaining four additional preset directories for sessions that never boot through the preset system in the first place.
+
 ## Consequences
 
-Bought: a workspace-wide crew fact that any number of sessions can safely share and mutate without a new persistence mechanism, reusing exactly the seam `dsh-workspace` already proved out. Cost: every `ctx.crew` caller must pass an explicit `workspaceId` (or load one from a ticket/roster record) rather than reading it from ambient session state, since the domain itself carries no notion of "the current session's workspace" — that resolution belongs to the tool layer built on top, not yet part of this change.
+Bought: a workspace-wide crew fact that any number of sessions can safely share and mutate without a new persistence mechanism, reusing exactly the seam `dsh-workspace` already proved out; four fewer preset directories than planned, since hired-member identity rides `dsh-subagent`'s existing per-child `persona`/`toolFilter` mechanism instead. Cost: every `ctx.crew` caller must pass an explicit `workspaceId` (or load one from a ticket/roster record) rather than reading it from ambient session state, since the domain itself carries no notion of "the current session's workspace" — each tool package resolves it itself via `ctx.workspaceRegistry.resolveByPath(agent.session.header.cwd)`, an uncached realpath lookup per call, acceptable at this feature's call volume.

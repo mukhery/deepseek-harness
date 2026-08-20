@@ -532,6 +532,91 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     ],
   },
   {
+    key: 'crew',
+    summary: 'Crew roster, ticket-ledger, and message-pool runtime.',
+    description: 'Crew roster, ticket-ledger, and message-pool runtime. Opens the single process-wide `crew` domain at startup; every method takes an explicit `workspaceId` (directly, or via the ticket/roster record it loads) rather than reading ambient state, matching the domain\'s per-record scoping.',
+    methods: [
+      {
+        signature: 'async hire(input: CrewHireInput): Promise<CrewRosterRecord>',
+        description: 'Record a newly hired continuable subagent\'s durable role binding. The caller publishes the child through `ctx.subagents.startContinuable()` first; this only records the roster fact once that session id exists.',
+        parameters: [{ name: 'input', description: 'Workspace, hired session id, role, and durable label.' }],
+        returns: 'the stored roster record.',
+      },
+      {
+        signature: 'roster(workspaceId: WorkspaceId): CrewRosterRecord[]',
+        description: 'List every roster member hired into one workspace\'s crew.',
+        parameters: [{ name: 'workspaceId', description: 'Workspace to list.' }],
+        returns: 'roster records in insertion order.',
+      },
+      {
+        signature: 'async openTicket(input: CrewOpenTicketInput): Promise<CrewTicketRecord>',
+        description: 'Open a new ticket in `open` status, unassigned.',
+        parameters: [{ name: 'input', description: 'Workspace, title, objective, and role scope.' }],
+        returns: 'the stored ticket record.',
+      },
+      {
+        signature: 'async assignTicket(ticketId: CrewTicketId, memberSessionId: SessionId): Promise<CrewTicketRecord>',
+        description: 'Assign an `open` ticket to a roster member hired into the ticket\'s role.',
+        parameters: [{ name: 'ticketId', description: 'Ticket to assign.' }, { name: 'memberSessionId', description: 'Roster member to assign it to.' }],
+        returns: 'the updated ticket record.',
+      },
+      {
+        signature: 'async startWork(ticketId: CrewTicketId, memberSessionId: SessionId): Promise<CrewTicketRecord>',
+        description: 'Mark an assigned ticket as actively being worked.',
+        parameters: [{ name: 'ticketId', description: 'Ticket to advance.' }, { name: 'memberSessionId', description: 'Caller, who must be the recorded assignee.' }],
+        returns: 'the updated ticket record.',
+      },
+      {
+        signature: 'async submitForReview( ticketId: CrewTicketId, memberSessionId: SessionId, evidence: string, summary: string, ): Promise<CrewTicketRecord>',
+        description: 'Submit a working ticket\'s evidence for independent review. Only the recorded assignee may submit; this never sets `done` — only verdict\'s `accept` outcome does.',
+        parameters: [{ name: 'ticketId', description: 'Ticket to submit.' }, { name: 'memberSessionId', description: 'Caller, who must be the recorded assignee.' }, { name: 'evidence', description: 'Cited evidence (branch/diff summary, findings, etc.).' }, { name: 'summary', description: 'Short closing summary of what was done.' }],
+        returns: 'the updated ticket record.',
+      },
+      {
+        signature: 'async submitBlocked(ticketId: CrewTicketId, memberSessionId: SessionId, reason: string): Promise<CrewTicketRecord>',
+        description: 'Mark a working ticket blocked, pending resolution (typically a human escalation) before it can be reassigned or continue.',
+        parameters: [{ name: 'ticketId', description: 'Ticket to block.' }, { name: 'memberSessionId', description: 'Caller, who must be the recorded assignee.' }, { name: 'reason', description: 'Why the ticket cannot proceed.' }],
+        returns: 'the updated ticket record.',
+      },
+      {
+        signature: 'async reassignTicket(ticketId: CrewTicketId, memberSessionId: SessionId): Promise<CrewTicketRecord>',
+        description: 'Reassign a `blocked` or `open` ticket to a roster member — typically called once a blocker is resolved (an escalation was answered).',
+        parameters: [{ name: 'ticketId', description: 'Ticket to reassign.' }, { name: 'memberSessionId', description: 'Roster member to assign it to.' }],
+        returns: 'the updated ticket record.',
+      },
+      {
+        signature: 'async verdict( ticketId: CrewTicketId, reviewerSessionId: SessionId, outcome: \'accept\' | \'reject\', rationale: string, prUrl?: string, ): Promise<CrewTicketRecord>',
+        description: 'Independently verdict an `in-review` ticket. This is the sole path that can set `done`, and the sole path that can attach `prUrl` — a caller accepting an engineering ticket after opening its PR passes `prUrl` in the same call, so the ledger\'s `done` state and its PR fact commit together. A `reject` returns the ticket directly to `assigned` for the same assignee with the rationale attached as new context, rather than resting in a separate terminal status.',
+        parameters: [{ name: 'ticketId', description: 'Ticket to verdict.' }, { name: 'reviewerSessionId', description: 'Reviewer session recording the verdict.' }, { name: 'outcome', description: '`accept` closes the ticket; `reject` reopens it.' }, { name: 'rationale', description: 'The reviewer\'s reasoning, always recorded.' }, { name: 'prUrl', description: 'Opened pull request URL; only meaningful with `accept`.' }],
+        returns: 'the updated ticket record.',
+      },
+      {
+        signature: 'ticket(ticketId: CrewTicketId): CrewTicketRecord | undefined',
+        description: 'Look up one ticket, synchronously from memory.',
+        parameters: [{ name: 'ticketId', description: 'Ticket id.' }],
+        returns: 'the ticket record, or `undefined` when unknown.',
+      },
+      {
+        signature: 'tickets(workspaceId: WorkspaceId): CrewTicketRecord[]',
+        description: 'List every ticket open in one workspace.',
+        parameters: [{ name: 'workspaceId', description: 'Workspace to list.' }],
+        returns: 'ticket records in insertion order.',
+      },
+      {
+        signature: 'async publish(input: CrewPublishInput): Promise<CrewMessageRecord>',
+        description: 'Publish one structured message to the workspace\'s pool.',
+        parameters: [{ name: 'input', description: 'Workspace, topic, kind, publisher, and body.' }],
+        returns: 'the stored message record.',
+      },
+      {
+        signature: 'readPool(filter: CrewReadPoolFilter): CrewMessageRecord[]',
+        description: 'Read the workspace\'s message pool, optionally filtered by topic and publish time, oldest first.',
+        parameters: [{ name: 'filter', description: 'Workspace, optional topic allowlist, optional lower bound.' }],
+        returns: 'matching message records in publish order.',
+      },
+    ],
+  },
+  {
     key: 'directoryPicker',
     summary: 'Abstract directory-picking service.',
     description: 'Abstract directory-picking service. Subclass, implement `capability()`, and load the subclass as a plugin — it registers as `ctx.directoryPicker` (one implementation per context; loading a second throws, cordis\' standard duplicate-service behavior). The capability object must be stable for the service lifetime: consumers may capture it across calls.',
@@ -2926,6 +3011,42 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'CredentialRef',
     declaration: 'export type CredentialRef = Branded<\'CredentialRef\'>;',
+  },
+  {
+    name: 'CrewHireInput',
+    declaration: 'export interface CrewHireInput {\n    readonly workspaceId: WorkspaceId;\n    readonly memberSessionId: SessionId;\n    readonly role: CrewRole;\n    readonly label: string;\n}',
+  },
+  {
+    name: 'CrewMessageKind',
+    declaration: 'export type CrewMessageKind = \'finding\' | \'decision\' | \'handoff\' | \'blocker\';',
+  },
+  {
+    name: 'CrewMessageRecord',
+    declaration: 'export type CrewMessageRecord = z.infer<typeof crewMessageRecord>;',
+  },
+  {
+    name: 'CrewOpenTicketInput',
+    declaration: 'export interface CrewOpenTicketInput {\n    readonly workspaceId: WorkspaceId;\n    readonly title: string;\n    readonly objective: string;\n    readonly role: CrewRole;\n    readonly citesMessageIds?: readonly CrewMessageId[];\n}',
+  },
+  {
+    name: 'CrewPublishInput',
+    declaration: 'export interface CrewPublishInput {\n    readonly workspaceId: WorkspaceId;\n    readonly topic: string;\n    readonly kind: CrewMessageKind;\n    readonly from: SessionId;\n    readonly body: string;\n    readonly citesTicketId?: CrewTicketId;\n}',
+  },
+  {
+    name: 'CrewReadPoolFilter',
+    declaration: 'export interface CrewReadPoolFilter {\n    readonly workspaceId: WorkspaceId;\n    readonly topics?: readonly string[];\n    readonly since?: string;\n}',
+  },
+  {
+    name: 'CrewRole',
+    declaration: 'export type CrewRole = \'director\' | \'researcher\' | \'strategist\' | \'engineer\' | \'reviewer\';',
+  },
+  {
+    name: 'CrewRosterRecord',
+    declaration: 'export type CrewRosterRecord = z.infer<typeof crewRosterRecord>;',
+  },
+  {
+    name: 'CrewTicketRecord',
+    declaration: 'export type CrewTicketRecord = z.infer<typeof crewTicketRecord>;',
   },
   {
     name: 'DiffCallView',

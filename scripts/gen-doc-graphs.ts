@@ -67,6 +67,7 @@ const GROUP_ORDER = [
   'core',
   'typert',
   'goal',
+  'crew',
   'process',
   'bash',
   'pty',
@@ -353,6 +354,14 @@ const SERVICE_ROLES: ServiceRole[] = [
     title: 'Same-session goal domain',
     mode: 'core',
     note: 'Folds revisioned objective state from the session log and keeps live continuation activation process-local.',
+  },
+  {
+    key: 'crew',
+    pkg: 'crew',
+    title: 'Workspace-scoped crew roster, ticket ledger, and message pool',
+    mode: 'core',
+    consumers: ['tool-crew-director', 'tool-crew-member', 'tool-crew-review'],
+    note: 'One process-wide domain over ctx.storage.domain; every roster/ticket/message record is self-scoped by an explicit workspaceId, the same per-record scoping dsh-workspace uses for its own records.',
   },
   {
     key: 'e2b',

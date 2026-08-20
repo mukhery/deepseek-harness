@@ -63,6 +63,14 @@ import * as ToolWeb from '@deepseek-ai/dsh-tool-web'
 import VmWorkflowEngine from '@deepseek-ai/dsh-workflow-worker-thread'
 import * as ToolRalph from '@deepseek-ai/dsh-tool-ralph'
 import * as ToolWorkflow from '@deepseek-ai/dsh-tool-workflow'
+import Storage from '@deepseek-ai/dsh-storage'
+import * as StorageSqlite from '@deepseek-ai/dsh-storage-sqlite'
+import * as StorageDomain from '@deepseek-ai/dsh-storage-domain'
+import WorkspaceRegistry from '@deepseek-ai/dsh-workspace'
+import CrewRuntime from '@deepseek-ai/dsh-crew'
+import * as ToolCrewDirector from '@deepseek-ai/dsh-tool-crew-director'
+import * as ToolCrewMember from '@deepseek-ai/dsh-tool-crew-member'
+import * as ToolCrewReview from '@deepseek-ai/dsh-tool-crew-review'
 import { githubSlug } from './verify-md-links.ts'
 
 /** Attachment seam marker that makes the attachments-conditional `read_image` schema harvestable. */
@@ -107,6 +115,22 @@ function registerCatalogSubagentProvider(ctx: Context, name: string): void {
     prepareContinuable: () => Promise.reject(new Error('tool-catalog provider cannot prepare a child')),
   }
   ctx.subagents.registerProvider(provider)
+}
+
+/** Mount the storage/domain/workspace/subagent/crew chain the crew tool packages require. */
+async function mountCatalogCrewChain(ctx: Context): Promise<void> {
+  await ctx.plugin(Storage)
+  await ctx.plugin(StorageSqlite, { path: ':memory:' })
+  await ctx.plugin(StorageDomain, { backend: 'sqlite', routes: {} })
+  ctx.provide('sessionPersistence', {
+    list: () => Promise.resolve([]),
+    load: () => { throw new Error('tool-catalog session persistence cannot load') },
+    inspect: () => { throw new Error('tool-catalog session persistence cannot inspect') },
+  } as never)
+  await ctx.plugin(WorkspaceRegistry)
+  await ctx.plugin(SubagentRuntime)
+  registerCatalogSubagentProvider(ctx, 'spawn')
+  await ctx.plugin(CrewRuntime)
 }
 
 /** Minted child-scope keys for packages whose tools are never global. */
@@ -327,6 +351,45 @@ const TOOL_PACKAGES: ToolPackage[] = [
     },
     note:
       'glob and grep are unconditional discovery tools that spawn the packaged ripgrep binary (`@vscode/ripgrep`) through ctx.subprocess as ordinary foreground calls (never background jobs) — no host `rg` install and no shell layer. The catalog uses `sampleOverCapGlobResults: true`; deployments must choose that behavior explicitly. Capped results save the complete formatted list through the optional ctx.spillStore backend; returned locators are follow-up-readable/searchable when the backend exposes local paths in co-located deployments.',
+  },
+  {
+    pkg: '@deepseek-ai/dsh-tool-crew-director',
+    dir: 'tool-crew-director',
+    source: 'packages/crew/tool-crew-director/src/index.ts',
+    requires: ['ctx.tools', 'ctx.crew', 'ctx.subagents', 'ctx.workspaceRegistry', 'a calling Agent with a workspace-registered cwd'],
+    writes: ['tool/call', 'crew domain roster/ticket records for mutations', 'tool/result'],
+    async mount(ctx) {
+      await mountCatalogCrewChain(ctx)
+      await ctx.plugin(ToolCrewDirector, {})
+    },
+    note:
+      'crew_hire delivers each hired role\'s identity inline through SubagentStartRequest.persona/toolFilter, not a preset; crew_assign_ticket also delivers the ticket objective as the member\'s next turn through ctx.subagents.followup.',
+  },
+  {
+    pkg: '@deepseek-ai/dsh-tool-crew-member',
+    dir: 'tool-crew-member',
+    source: 'packages/crew/tool-crew-member/src/index.ts',
+    requires: ['ctx.tools', 'ctx.crew', 'ctx.workspaceRegistry', 'a calling Agent with a workspace-registered cwd'],
+    writes: ['tool/call', 'crew domain ticket/message records for mutations', 'tool/result'],
+    async mount(ctx) {
+      await mountCatalogCrewChain(ctx)
+      await ctx.plugin(ToolCrewMember)
+    },
+    note:
+      'crew_report never sets a ticket done; only dsh-tool-crew-review\'s crew_verdict does.',
+  },
+  {
+    pkg: '@deepseek-ai/dsh-tool-crew-review',
+    dir: 'tool-crew-review',
+    source: 'packages/crew/tool-crew-review/src/index.ts',
+    requires: ['ctx.tools', 'ctx.crew', 'a calling Agent'],
+    writes: ['tool/call', 'crew domain ticket records for mutations', 'tool/result'],
+    async mount(ctx) {
+      await mountCatalogCrewChain(ctx)
+      await ctx.plugin(ToolCrewReview)
+    },
+    note:
+      'crew_verdict is the sole path that can set a ticket done; a deployment exposes it only through a hired reviewer\'s toolFilter.',
   },
   {
     pkg: '@deepseek-ai/dsh-tool-terminal',
