@@ -18,7 +18,7 @@
   name: '@deepseek-ai/dsh-persona'
   config:
     text: >-
-      You are the Director of a crew of agents pursuing one long-running project rooted at {{cwd}}. Hire crew members into fixed roles (researcher, strategist, engineer, reviewer) with crew_hire, open and assign tickets with crew_open_ticket/crew_assign_ticket, and check crew_board periodically. You do not do the crew's work yourself. A worker's own report never closes a ticket — only an independent reviewer's verdict does. When a blocked ticket or a pool message needs a decision only the human user can make, use ask_user_question to raise it directly — do not guess, and do not let the crew stay stuck on a call that is not yours to make.
+      You are the Director of a crew of agents pursuing one long-running project rooted at {{cwd}}. Hire crew members into fixed roles (researcher, strategist, engineer, reviewer) with crew_hire, open and assign tickets with crew_open_ticket/crew_assign_ticket, and check crew_board periodically. You do not do the crew's work yourself. A worker's own report never closes a ticket — only an independent reviewer's verdict does. When a blocked ticket or a pool message needs a decision only the human user can make, use ask_user_question to raise it directly — do not guess, and do not let the crew stay stuck on a call that is not yours to make. Supervise actively, not just at the end: use list_agents between check-ins to see who is still running, and send_message or interrupt_agent to redirect a member whose work has clearly gone off track — do not wait for a bad result to reach crew_report before correcting it.
 
 - id: agent-instructions
   name: '@deepseek-ai/dsh-agent-instructions'
@@ -59,16 +59,42 @@
     # scope, and this preset's own rows below `disabled` one of bash/pwsh per
     # `process.platform` — so the shell tool name must be picked the same way,
     # never both listed unconditionally.
+    #
+    # A reviewer additionally gets the session_* names below: independent
+    # verification means reading the assignee's actual turn-by-turn work, not
+    # only trusting the prose it chose to put in crew_report's evidence field.
     roleToolAllow: !!js >-
       process.platform === 'win32'
-        ? { engineer: ['pwsh', 'read', 'write', 'edit', 'glob', 'grep'], reviewer: ['pwsh', 'read', 'glob', 'grep'] }
-        : { engineer: ['bash', 'read', 'write', 'edit', 'glob', 'grep'], reviewer: ['bash', 'read', 'glob', 'grep'] }
+        ? {
+            engineer: ['pwsh', 'read', 'write', 'edit', 'glob', 'grep'],
+            reviewer: [
+              'pwsh', 'read', 'glob', 'grep',
+              'session_search', 'session_event_search', 'session_trace', 'session_event_trace', 'session_event_read',
+            ],
+          }
+        : {
+            engineer: ['bash', 'read', 'write', 'edit', 'glob', 'grep'],
+            reviewer: [
+              'bash', 'read', 'glob', 'grep',
+              'session_search', 'session_event_search', 'session_trace', 'session_event_trace', 'session_event_read',
+            ],
+          }
 
 - id: tool-crew-member
   name: '@deepseek-ai/dsh-tool-crew-member'
 
 - id: tool-crew-review
   name: '@deepseek-ai/dsh-tool-crew-review'
+
+# The Reviewer's independent-verification tool. Workspace-authorized (any
+# session sharing this cwd), not lineage-authorized, so it reaches the
+# assignee's actual session even though the Reviewer is not its parent — the
+# same trust boundary crew roles already cross via full bash/fs access to the
+# whole repository, not a new one. ctx.sessionQuery (session-query-sqlite) is
+# host-plane already, in the base bundle; only the model-facing tool is
+# preset-scoped, same split as every other row here.
+- id: tool-session-query
+  name: '@deepseek-ai/dsh-tool-session-query'
 
 # ── crew oversight ──────────────────────────────────────────────────────────
 #

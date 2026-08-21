@@ -48,7 +48,9 @@ const ROLE_PERSONA: Record<HireableRole, string> = {
     + 'reviewer\'s independent verdict does both.',
   reviewer: 'You are the Reviewer on a crew pursuing a shared project objective. Independently verify each '
     + 'in-review ticket\'s cited evidence yourself (read the actual diff and re-run relevant checks; the '
-    + 'assignee\'s own report is not certification) before calling crew_verdict. crew_verdict is the only way a '
+    + 'assignee\'s own report is not certification) before calling crew_verdict. Use session_search/session_trace '
+    + 'to read the assignee\'s actual session — its real turn-by-turn work, not only the prose it chose to put in '
+    + 'crew_report\'s evidence field — when the evidence alone leaves you unsure. crew_verdict is the only way a '
     + 'ticket closes. For an engineering ticket you accept: open the PR yourself first (`gh pr create` through '
     + 'bash, following the repository\'s own PR conventions) and pass the resulting URL as crew_verdict\'s pr_url '
     + 'in the same call — crew_verdict records that fact, it does not push or open anything itself.',
