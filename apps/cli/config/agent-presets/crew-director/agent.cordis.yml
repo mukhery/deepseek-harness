@@ -44,6 +44,25 @@
   name: '@deepseek-ai/dsh-tool-crew-director'
   config:
     provider: spawn
+    # Extra tool names unioned onto each role's fixed crew tools at hire time
+    # (dsh-tool-crew-director's Config.roleToolAllow) — model-facing tool
+    # NAMES (defineTool's own `name`), not the cordis row ids below that
+    # register them, and deployment-owned because they vary by deployment. An
+    # engineer gets full read/write access to implement a ticket (in its own
+    # git worktree via ordinary `git worktree add` through bash — there is no
+    # separate worktree tool); a reviewer gets the same tools read-only in
+    # effect, since its role never assigns it a ticket to legitimately write
+    # against, and independently re-running checks or reading a diff needs
+    # real fs/shell access, not just the pool.
+    #
+    # `ctx.tools.restrict()` throws loudly on a name that never registered in
+    # scope, and this preset's own rows below `disabled` one of bash/pwsh per
+    # `process.platform` — so the shell tool name must be picked the same way,
+    # never both listed unconditionally.
+    roleToolAllow: !!js >-
+      process.platform === 'win32'
+        ? { engineer: ['pwsh', 'read', 'write', 'edit', 'glob', 'grep'], reviewer: ['pwsh', 'read', 'glob', 'grep'] }
+        : { engineer: ['bash', 'read', 'write', 'edit', 'glob', 'grep'], reviewer: ['bash', 'read', 'glob', 'grep'] }
 
 - id: tool-crew-member
   name: '@deepseek-ai/dsh-tool-crew-member'

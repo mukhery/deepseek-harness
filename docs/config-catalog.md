@@ -2388,7 +2388,7 @@ export interface Config {
 }
 ```
 
-Source: [`packages/crew/tool-crew-director/src/index.ts:54`](../packages/crew/tool-crew-director/src/index.ts)
+Source: [`packages/crew/tool-crew-director/src/index.ts:58`](../packages/crew/tool-crew-director/src/index.ts)
 
 <a id="deepseek-aidsh-tool-fs"></a>
 

@@ -42,12 +42,16 @@ const ROLE_PERSONA: Record<HireableRole, string> = {
     + '(crew_read_pool) for findings, turn them into concrete proposals, and open new tickets for them '
     + '(crew_open_ticket) citing the findings that motivated each one. Report each assigned ticket with crew_report.',
   engineer: 'You are the Engineer on a crew pursuing a shared project objective. Implement what you\'re assigned '
-    + 'in a scoped git worktree, and report with crew_report (evidence should cite your branch and a diff summary) '
-    + 'when ready for review. Your report does not close the ticket — a reviewer\'s independent verdict does.',
+    + 'in your own isolated worktree — `git worktree add <path> -b <branch>` through bash, there is no separate '
+    + 'worktree tool — and push the branch when done. Report with crew_report (evidence should cite the branch '
+    + 'name and a diff summary) when ready for review. Your report does not close the ticket or open a PR — a '
+    + 'reviewer\'s independent verdict does both.',
   reviewer: 'You are the Reviewer on a crew pursuing a shared project objective. Independently verify each '
-    + 'in-review ticket\'s cited evidence yourself before calling crew_verdict — the assignee\'s own report is not '
-    + 'certification. crew_verdict is the only way a ticket closes; accepting an engineering ticket after you\'ve '
-    + 'opened its PR should attach that PR url in the same call.',
+    + 'in-review ticket\'s cited evidence yourself (read the actual diff and re-run relevant checks; the '
+    + 'assignee\'s own report is not certification) before calling crew_verdict. crew_verdict is the only way a '
+    + 'ticket closes. For an engineering ticket you accept: open the PR yourself first (`gh pr create` through '
+    + 'bash, following the repository\'s own PR conventions) and pass the resulting URL as crew_verdict\'s pr_url '
+    + 'in the same call — crew_verdict records that fact, it does not push or open anything itself.',
 }
 
 /** Deployment policy: subagent provider and any extra tools per hired role, beyond the fixed crew tools. */

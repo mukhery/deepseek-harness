@@ -4,7 +4,7 @@ Model-facing `crew_verdict` tool over [`ctx.crew`](../crew/README.md) — the **
 
 ## `crew_verdict`
 
-`accept` sets the ticket `done`; passing `pr_url` in the same call attaches an already-opened PR's url to the ledger atomically with acceptance (the caller — typically the Engineer's worktree branch already pushed — supplies the url; this package does not open PRs itself). `reject` returns the ticket to its same assignee with the reviewer's rationale attached as new context, never setting `done`. `pr_url` with `reject` is rejected as invalid: a rejected ticket has no PR to record.
+`accept` sets the ticket `done`; passing `pr_url` in the same call attaches an already-opened PR's url to the ledger atomically with acceptance. This package does not push a branch or run `gh pr create` itself: the reviewer opens the PR through its own ordinary bash access (the engineer having already pushed the branch cited in the ticket's evidence) and passes the resulting url into this same call. `reject` returns the ticket to its same assignee with the reviewer's rationale attached as new context, never setting `done`. `pr_url` with `reject` is rejected as invalid: a rejected ticket has no PR to record.
 
 The tool description explicitly tells the model the assignee's own `crew_report` is not certification — this package exists specifically because `ctx.crew`'s own service layer, not just this tool's schema, refuses every other path to `done` (see [`ctx.crew`'s README](../crew/README.md)).
 
