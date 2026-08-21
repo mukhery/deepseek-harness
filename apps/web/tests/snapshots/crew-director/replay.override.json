@@ -1,0 +1,32 @@
+[
+  {
+    "kind": "chunks",
+    "chunks": [
+      { "type": "block-start", "index": 0, "blockType": "tool-call" },
+      { "type": "tool-call-delta", "index": 0, "id": "call_crew_open_ticket", "name": "crew_open_ticket", "argumentsDelta": "{\"title\":\"Competitor pricing\",\"objective\":\"Research competitor pricing pages and summarize tiers.\",\"role\":\"researcher\"}" },
+      { "type": "block-end", "index": 0, "block": { "type": "tool-call", "id": "call_crew_open_ticket", "name": "crew_open_ticket", "arguments": "{\"title\":\"Competitor pricing\",\"objective\":\"Research competitor pricing pages and summarize tiers.\",\"role\":\"researcher\"}" } },
+      { "type": "usage", "usage": { "inputTokens": 40, "outputTokens": 12 } },
+      { "type": "finish", "reason": { "kind": "tool-calls" } }
+    ]
+  },
+  {
+    "kind": "chunks",
+    "chunks": [
+      { "type": "block-start", "index": 0, "blockType": "tool-call" },
+      { "type": "tool-call-delta", "index": 0, "id": "call_crew_board", "name": "crew_board", "argumentsDelta": "{}" },
+      { "type": "block-end", "index": 0, "block": { "type": "tool-call", "id": "call_crew_board", "name": "crew_board", "arguments": "{}" } },
+      { "type": "usage", "usage": { "inputTokens": 55, "outputTokens": 4 } },
+      { "type": "finish", "reason": { "kind": "tool-calls" } }
+    ]
+  },
+  {
+    "kind": "chunks",
+    "chunks": [
+      { "type": "block-start", "index": 0, "blockType": "text" },
+      { "type": "text-delta", "index": 0, "text": "CREW READY" },
+      { "type": "block-end", "index": 0, "block": { "type": "text", "text": "CREW READY" } },
+      { "type": "usage", "usage": { "inputTokens": 65, "outputTokens": 2 } },
+      { "type": "finish", "reason": { "kind": "stop" } }
+    ]
+  }
+]

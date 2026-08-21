@@ -267,6 +267,15 @@ importers:
       '@deepseek-ai/dsh-tool-cordis':
         specifier: workspace:^
         version: link:../../packages/extensions/tool-cordis
+      '@deepseek-ai/dsh-tool-crew-director':
+        specifier: workspace:^
+        version: link:../../packages/crew/tool-crew-director
+      '@deepseek-ai/dsh-tool-crew-member':
+        specifier: workspace:^
+        version: link:../../packages/crew/tool-crew-member
+      '@deepseek-ai/dsh-tool-crew-review':
+        specifier: workspace:^
+        version: link:../../packages/crew/tool-crew-review
       '@deepseek-ai/dsh-tool-fs':
         specifier: workspace:^
         version: link:../../packages/fs/tool-fs
