@@ -35,6 +35,7 @@ import type {
   ApiProxy, ClientRequest, ClientResponse, HistoryEntry, HostFrame, MuxFrame, RpcReceipt,
   ModelProviderGroup, ModelSelection, RpcRequest, RpcResponse, RpcResult, ServerRequest, ServerResponse, SessionSummary,
   ToolCallView, ToolEventView, ToolResultView, WorkspaceId, WorkspaceView,
+  CrewRosterView, CrewTicketView,
 } from './api.ts'
 import type { RequestPayload, ResponseValue, RpcMethodMap } from '@deepseek-ai/dsh-host-apiproxy/api'
 import { AbstractApiClient, randomUuid, RpcId, SESSION_SEARCH_RESULT_LIMIT } from './api.ts'
@@ -1437,6 +1438,13 @@ export interface FixtureOptions {
   dropSessionCreateResponse?: boolean
   /** Order of the two successful create frames. */
   createFrameOrder?: 'session-first' | 'workspace-first'
+  /**
+   * Static crew.board seed for the fixture Workspace (`fx-ws-fixture`): the
+   * Crew panel is read-only, so the fixture never mutates this — no
+   * mutation-tool round trip runs through the browser, unlike every other
+   * fixture domain here.
+   */
+  crewBoard?: { roster: readonly CrewRosterView[]; tickets: readonly CrewTicketView[] }
 }
 
 /** Inbox pump shared by both stream generators (FrameQueue pattern: ONE abort listener hung
@@ -1562,6 +1570,9 @@ function createFixtureWorld(options: FixtureOptions): FixtureWorld {
   // Registry-global archive set mirroring the host: archived sessions keep
   // their workspace accounting slot and only grouping surfaces hide them.
   const archivedSessionIds: SessionId[] = []
+  // Static crew.board seed (see FixtureOptions.crewBoard): read-only, never mutated.
+  const crewRoster: CrewRosterView[] = options.crewBoard === undefined ? [] : [...options.crewBoard.roster]
+  const crewTickets: CrewTicketView[] = options.crewBoard === undefined ? [] : [...options.crewBoard.tickets]
 
   // In-memory browse tree behind the fixture's `browse` picker capability —
   // deterministic content mirroring the design mock so assembled Web tests
@@ -2694,6 +2705,12 @@ function createFixtureWorld(options: FixtureOptions): FixtureWorld {
         return ok(request, { archivedSessionIds: [...archivedSessionIds] })
       },
     },
+    crew: {
+      board: request => ok(request, {
+        roster: crewRoster.filter(r => r.workspaceId === request.payload.workspaceId).map(r => ({ ...r })),
+        tickets: crewTickets.filter(t => t.workspaceId === request.payload.workspaceId).map(t => ({ ...t })),
+      }),
+    },
     agentPresets: {
       // Both trusts appear, because a surface must present a locally authored
       // preset differently from one the deployment vetted.
@@ -3104,6 +3121,7 @@ export class FixtureApiClient extends AbstractApiClient {
       case 'workspace.insertBefore': return this.api.workspace.insertBefore(request)
       case 'workspace.insertSessionBefore': return this.api.workspace.insertSessionBefore(request)
       case 'workspace.archiveSession': return this.api.workspace.archiveSession(request)
+      case 'crew.board': return this.api.crew.board(request)
       case 'skill.list': return this.api.skills.list(request)
       case 'agentPreset.list': return this.api.agentPresets.list(request)
       case 'agentPreset.select': return this.api.agentPresets.select(request)

@@ -10,6 +10,7 @@ export type {
   ApprovalResponsePayload, QuestionResponsePayload, HistoryEntry, ToolEventView,
   DirectoryEntry, DirectoryListing,
   ResponseValue, WorkspaceApi, WorkspaceId, WorkspaceView,
+  CrewApi, CrewRole, CrewRosterView, CrewTicketId, CrewTicketStatus, CrewTicketView,
   SkillsApi, SkillEntry,
   ModelCatalogFailure, ModelCatalogModel, ModelProviderGroup, ModelReasoning,
   ModelReasoningEffort, ModelSelection, QueueAction, QueuedInboxItem, SessionModels,

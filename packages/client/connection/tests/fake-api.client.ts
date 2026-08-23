@@ -169,6 +169,10 @@ export class FakeApiClient implements IApiClient {
     }))),
   }
 
+  readonly crew: IApiClient['crew'] = {
+    board: (payload: unknown) => this.record('crew.board', payload, Promise.resolve(ok({ roster: [], tickets: [] }))),
+  }
+
   // Payloads stay `unknown` (lint-lane note above); response rows are the real
   // wire shapes so cases can program catalogs and skill lists without casts.
   onSkillList: (payload: unknown) => Promise<RpcResponse<{ skills: SkillEntry[] }>>
