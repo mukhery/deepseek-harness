@@ -1,0 +1,22 @@
+- button "New session"
+- button "Collapse sidebar":
+  - img
+- button "New session":
+  - img
+  - text: New Session
+- tablist:
+  - tab "Sessions"
+  - tab "Crew" [selected]
+- button "Add workspace":
+  - img
+- status:
+  - text: 1 ticket needs your input.
+  - list:
+    - listitem: Rotate the payment gateway credentialNeed the new sandbox credential from the human
+  - button "Go to session"
+- text: "Open 1 Investigate flaky checkout test Engineer Find and fix the intermittent failure Unassigned Assigned 1 Add pagination to the orders API Engineer Page large result sets Assignee: Engineer #1 In progress 1 Migrate the billing worker Engineer Move it onto the new queue Assignee: Engineer #1 In review 1 Fix the flaky checkout test Engineer Stabilize the checkout suite Assignee: Engineer #1 Evidence: Reproduced locally; root-caused a race in the payment mock Summary: Fix ready for review Blocked 1 Rotate the payment gateway credential Engineer Swap to the new sandbox key Assignee: Engineer #1 Need the new sandbox credential from the human Done 1 Add a health-check endpoint Engineer Expose /healthz Assignee: Engineer #1 Verdict: Verified in staging"
+- link "https://example.com/pr/1":
+  - /url: https://example.com/pr/1
+- button "Settings":
+  - img
+  - text: Settings
