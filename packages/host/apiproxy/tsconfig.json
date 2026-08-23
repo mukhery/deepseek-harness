@@ -90,6 +90,9 @@
       "path": "../../workspace/workspace"
     },
     {
+      "path": "../../crew/crew"
+    },
+    {
       "path": "../directory-picker"
     },
     {

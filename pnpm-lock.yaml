@@ -4847,6 +4847,9 @@ importers:
       '@deepseek-ai/dsh-credentials':
         specifier: workspace:^
         version: link:../../credentials/credentials
+      '@deepseek-ai/dsh-crew':
+        specifier: workspace:^
+        version: link:../../crew/crew
       '@deepseek-ai/dsh-goal':
         specifier: workspace:^
         version: link:../../goal/goal
