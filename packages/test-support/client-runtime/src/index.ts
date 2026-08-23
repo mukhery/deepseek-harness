@@ -32,6 +32,7 @@ import type {
 import { registerDomSnapshotSerializer } from './snapshot.ts'
 import { TestSessions } from './sessions.ts'
 import { TestWorkspaces } from './workspaces.ts'
+import { TestCrewBoard } from './crew-board.ts'
 import type { Stabilizer } from './fixtures.ts'
 
 export { domSnapshotSerializer, registerDomSnapshotSerializer } from './snapshot.ts'
@@ -39,6 +40,7 @@ export { FixtureSession, TestSessions } from './sessions.ts'
 export { stubSettingsScope } from './settings-scope.ts'
 export type { StubSettingsScope } from './settings-scope.ts'
 export { TestWorkspaces } from './workspaces.ts'
+export { TestCrewBoard } from './crew-board.ts'
 export { TestRemote } from './remote.ts'
 export { conversationSnapshot, workspaceListState } from './fixtures.ts'
 export type { SessionBehaviorOverrides, SessionFixture, Stabilizer } from './fixtures.ts'
@@ -181,6 +183,8 @@ export class SlotTestRuntime {
   readonly sessions: TestSessions
   /** Workspaces double (list observable, recorded intent actions). */
   readonly workspaces: TestWorkspaces
+  /** Crew-board double (per-workspace observable, recorded `ensure` calls). */
+  readonly crewBoard: TestCrewBoard
 
   private readonly stabilizer: Stabilizer = async (fn) => {
     await act(async () => { await fn() })
@@ -201,8 +205,10 @@ export class SlotTestRuntime {
     this.root = new TestRoot(slots, this.stabilizer)
     this.sessions = new TestSessions(this.stabilizer, ctx)
     this.workspaces = new TestWorkspaces(this.stabilizer)
+    this.crewBoard = new TestCrewBoard()
     ctx.provide('sessions', this.sessions)
     ctx.provide('workspaces', this.workspaces)
+    ctx.provide('crewBoard', this.crewBoard)
     // Capturing install: the production renderer does the rendering; the
     // wrapper only takes the host face for storeOf (no machinery copied).
     const renderer = createSlotRenderer()

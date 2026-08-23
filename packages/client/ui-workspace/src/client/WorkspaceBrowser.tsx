@@ -24,6 +24,7 @@ import { deriveFlat, deriveGroups, deriveSearchResults, UNGROUPED_KEY } from './
 import { ProjectRowItem, SearchResultItem, SessionNodeItem } from './rows/Rows.tsx'
 import { FLAT_SESSION_ORDER_KEY } from './stores.ts'
 import { WorkspacePickFlow } from './WorkspacePicker.tsx'
+import { CrewBoard } from './crew/CrewBoard.tsx'
 import css from './WorkspaceBrowser.module.css'
 
 /**
@@ -758,6 +759,8 @@ export function WorkspaceBrowser({
   searchSessions,
   searchResultLimit,
   useDirectoryFlow,
+  useCrewBoard,
+  ensureCrewBoard,
   renderSlot,
   t,
 }: WorkspaceBrowserProps) {
@@ -769,9 +772,16 @@ export function WorkspaceBrowser({
   const directoryFlowAvailable = useDirectoryFlow(occupied => occupied)
   const groupBy = useStore(s => s.groupBy)
   const orderBy = useStore(s => s.orderBy)
+  const viewMode = useStore(s => s.viewMode)
   const groupExpansion = useStore(s => s.groupExpansion)
   const sessionOrderByAccount = useStore(s => s.sessionOrderByAccount)
   const sessionUpdatedAtByAccount = useStore(s => s.sessionUpdatedAtByAccount)
+  // The Crew tab scopes to the workspace containing the current session —
+  // the same resolution SessionTree's own currentGroup already computes.
+  const currentSessionId = useSessions(state => state.current)
+  const currentWorkspaceId = workspaces.find(
+    workspace => currentSessionId !== undefined && workspace.sessionIds.includes(currentSessionId),
+  )?.workspaceId
   useEffect(() => {
     if (workspacePhase !== 'ready') return
     actions.retainAccountKeys([
@@ -976,11 +986,31 @@ export function WorkspaceBrowser({
     <div className={clsx(css.root, !wide && css.rail)}>
       <div className={css.sectionHeader}>
         {wide && (
-          <span className={clsx(css.sectionLabel, css.wide, searchExpanded && css.sectionLabelHidden)}>
-            {groupBy === 'flat' ? t('section.sessions') : t('section.workspaces')}
-          </span>
+          <div
+            className={clsx(css.sectionLabel, css.wide, css.viewModeTabs, searchExpanded && css.sectionLabelHidden)}
+            role="tablist"
+          >
+            <button
+              type="button"
+              role="tab"
+              aria-selected={viewMode === 'sessions'}
+              className={clsx(css.viewModeTab, viewMode === 'sessions' && css.viewModeTabActive)}
+              onClick={() => { actions.setViewMode('sessions') }}
+            >
+              {t('crew.tab.sessions')}
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={viewMode === 'crew'}
+              className={clsx(css.viewModeTab, viewMode === 'crew' && css.viewModeTabActive)}
+              onClick={() => { actions.setViewMode('crew') }}
+            >
+              {t('crew.tab.crew')}
+            </button>
+          </div>
         )}
-        {wide && (
+        {wide && viewMode === 'sessions' && (
           <div className={clsx(css.searchSlot, searchExpanded && css.searchSlotExpanded)}>
             <div
               ref={searchRoot}
@@ -1038,7 +1068,7 @@ export function WorkspaceBrowser({
           </div>
         )}
         <div className={clsx(css.headerActions, wide && searchExpanded && css.headerActionsHidden)}>
-          {wide && (
+          {wide && viewMode === 'sessions' && (
             <ViewOptionsMenu
               groupBy={groupBy}
               orderBy={orderBy}
@@ -1106,64 +1136,76 @@ export function WorkspaceBrowser({
       {/* Always-mounted seat keeps the region's flex slot while the list
           itself is wide-only. */}
       <div className={css.listArea}>
-        {wide && (normalizedQuery !== ''
+        {wide && (viewMode === 'crew'
           ? (
-            <SearchResults
+            <CrewBoard
+              workspaceId={currentWorkspaceId}
+              ensureCrewBoard={ensureCrewBoard}
+              useCrewBoard={useCrewBoard}
               useSessions={useSessions}
+              useWorkspaces={useWorkspaces}
               open={open}
-              workspaces={workspaces}
-              archivedSessionIds={archivedSessionIds}
-              query={normalizedQuery}
-              remote={remoteSearch}
-              resultLimit={searchResultLimit}
               t={t}
             />
           )
-          : groupBy === 'flat'
+          : normalizedQuery !== ''
             ? (
-              <FlatList
-                useSessions={useSessions} open={open} forkSession={forkSession}
-                onSessionRename={onSessionRename} onSessionArchive={onSessionArchive}
+              <SearchResults
+                useSessions={useSessions}
+                open={open}
+                workspaces={workspaces}
                 archivedSessionIds={archivedSessionIds}
-                orderBy={orderBy}
-                sessionOrderByAccount={sessionOrderByAccount}
-                sessionUpdatedAtByAccount={sessionUpdatedAtByAccount}
-                syncSessionOrderAccount={actions.syncSessionOrderAccount}
-                setSessionOrder={actions.setSessionOrder}
+                query={normalizedQuery}
+                remote={remoteSearch}
+                resultLimit={searchResultLimit}
                 t={t}
               />
             )
-            : (
-              <SessionTree
-                useSessions={useSessions}
-                onSessionRename={onSessionRename}
-                onSessionArchive={onSessionArchive}
-                forkSession={forkSession}
-                workspaces={workspaces}
-                groupExpansion={groupExpansion}
-                setGroupExpanded={actions.setGroupExpanded}
-                sessionOrderByAccount={sessionOrderByAccount}
-                sessionUpdatedAtByAccount={sessionUpdatedAtByAccount}
-                syncSessionOrderAccount={actions.syncSessionOrderAccount}
-                setSessionOrder={actions.setSessionOrder}
-                archivedSessionIds={archivedSessionIds}
-                startSession={startSession}
-                open={open}
-                insertWorkspaceBefore={insertWorkspaceBefore}
-                insertSessionBefore={insertSessionBefore}
-                orderBy={orderBy}
-                t={t}
-                onRenameRequest={(workspaceId, currentTitle) => {
-                  setRenameTarget({ workspaceId, currentTitle })
-                  setRenameDraft(currentTitle)
-                  setRenameError(null)
-                }}
-                onDeleteRequest={(workspaceId, title) => {
-                  setDeleteTarget({ workspaceId, title })
-                  setDeleteError(null)
-                }}
-              />
-            ))}
+            : groupBy === 'flat'
+              ? (
+                <FlatList
+                  useSessions={useSessions} open={open} forkSession={forkSession}
+                  onSessionRename={onSessionRename} onSessionArchive={onSessionArchive}
+                  archivedSessionIds={archivedSessionIds}
+                  orderBy={orderBy}
+                  sessionOrderByAccount={sessionOrderByAccount}
+                  sessionUpdatedAtByAccount={sessionUpdatedAtByAccount}
+                  syncSessionOrderAccount={actions.syncSessionOrderAccount}
+                  setSessionOrder={actions.setSessionOrder}
+                  t={t}
+                />
+              )
+              : (
+                <SessionTree
+                  useSessions={useSessions}
+                  onSessionRename={onSessionRename}
+                  onSessionArchive={onSessionArchive}
+                  forkSession={forkSession}
+                  workspaces={workspaces}
+                  groupExpansion={groupExpansion}
+                  setGroupExpanded={actions.setGroupExpanded}
+                  sessionOrderByAccount={sessionOrderByAccount}
+                  sessionUpdatedAtByAccount={sessionUpdatedAtByAccount}
+                  syncSessionOrderAccount={actions.syncSessionOrderAccount}
+                  setSessionOrder={actions.setSessionOrder}
+                  archivedSessionIds={archivedSessionIds}
+                  startSession={startSession}
+                  open={open}
+                  insertWorkspaceBefore={insertWorkspaceBefore}
+                  insertSessionBefore={insertSessionBefore}
+                  orderBy={orderBy}
+                  t={t}
+                  onRenameRequest={(workspaceId, currentTitle) => {
+                    setRenameTarget({ workspaceId, currentTitle })
+                    setRenameDraft(currentTitle)
+                    setRenameError(null)
+                  }}
+                  onDeleteRequest={(workspaceId, title) => {
+                    setDeleteTarget({ workspaceId, title })
+                    setDeleteError(null)
+                  }}
+                />
+              ))}
       </div>
 
       <Modal

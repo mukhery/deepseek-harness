@@ -28,7 +28,7 @@ import type { HostObservable, PropsLocale, PropsRenderSlots, PropsRuntime, Props
 import type {} from '@deepseek-ai/dsh-client-ui-sidebar/client'
 import type {} from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type {
-  SessionId, SessionSearchResultItem, WorkspaceId, WorkspaceView,
+  CrewBoardsState, SessionId, SessionSearchResultItem, WorkspaceId, WorkspaceView,
 } from '@deepseek-ai/dsh-client-runtime/client'
 import type { createWorkspaceViewStore } from '../stores.ts'
 
@@ -84,12 +84,26 @@ export type DirectoryPickingHooks = {
   useDirectoryFlow: SnapshotSelectorHook<boolean>
 }
 
+/** Component-side view of the crew-board share: the bound per-workspace board selector hook. */
+export type CrewBoardHooks = {
+  /** Selector hook over the crew-board-by-workspace map (`ctx.crewBoard.list`). */
+  useCrewBoard: SnapshotSelectorHook<CrewBoardsState>
+}
+
 /**
  * Browser-private injected share (arrives via the register inject factory).
  * Data reads use the global framework hooks; these are the Host actions the
  * browsing region drives.
  */
 export type WorkspaceBrowserInjected = DirectoryPickingInjected & {
+  hooks: { crewBoard: HostObservable<CrewBoardsState> }
+  /**
+   * Lazily pull one workspace's crew board (idempotent — a workspace already
+   * fetched or in flight is a no-op). The Crew tab calls this on mount and on
+   * every workspace change; later updates arrive through the runtime's own
+   * `host/crew-board-changed` push.
+   */
+  ensureCrewBoard: (workspaceId: WorkspaceId) => void
   /**
    * Start a New Session in a Workspace: reuse-or-create its blank session and
    * open it; without an explicit workspace, inherit the current Session
@@ -144,6 +158,7 @@ export type WorkspaceBrowserProps =
   & PropsStore<ReturnType<typeof createWorkspaceViewStore>>
   & Omit<WorkspaceBrowserInjected, 'hooks'>
   & DirectoryPickingHooks
+  & CrewBoardHooks
   & PropsLocale<'workspace'>
 
 /**

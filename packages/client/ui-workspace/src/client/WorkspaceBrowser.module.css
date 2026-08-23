@@ -86,6 +86,33 @@
   transition-delay: 0s, 0s, 0s, 0s, 180ms;
 }
 
+.viewModeTabs {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  max-width: none;
+}
+
+.viewModeTab {
+  border: none;
+  border-radius: 8px;
+  padding: 2px 8px;
+  background: transparent;
+  color: var(--dsw-alias-label-secondary);
+  font: inherit;
+  line-height: 20px;
+  cursor: pointer;
+}
+
+.viewModeTab:hover {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.viewModeTabActive {
+  color: var(--dsw-alias-label-primary);
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
 .searchSlot {
   flex: 1;
   max-width: 28px;

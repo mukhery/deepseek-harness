@@ -42,7 +42,7 @@ const NS = 'workspace'
  * provides a waitable service. apply therefore depends on each slot
  * declaration through `slots.inject()` instead of assuming order.
  */
-export const inject = ['slots', 'sessions', 'workspaces', 'locale']
+export const inject = ['slots', 'sessions', 'workspaces', 'crewBoard', 'locale']
 
 /**
  * Register the browser and picker once their slot declarations are on the
@@ -99,7 +99,8 @@ export function apply(ctx: ClientContext): void {
       await ctx.workspaces.insertSessionBefore(workspaceId, sessionId, beforeSessionId)
     },
     createWorkspace: input => ctx.workspaces.create(input),
-    hooks: { directoryFlow: browserFlowSource },
+    ensureCrewBoard: (workspaceId) => { ctx.crewBoard.ensure(workspaceId) },
+    hooks: { directoryFlow: browserFlowSource, crewBoard: ctx.crewBoard.list },
   })
   const pickerInjected = (): WorkspacePickerInjected => ({
     createWorkspace: input => ctx.workspaces.create(input),
