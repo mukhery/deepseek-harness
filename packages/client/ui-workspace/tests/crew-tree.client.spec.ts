@@ -127,6 +127,10 @@ describe('deriveEscalationBanner', () => {
     // idleDirector is in-workspace but has no pending question.
     const banner2 = deriveEscalationBanner(board, sessionList([idleDirector]), workspace('w1', ['idle']))
     expect(banner2?.matchedSessionId).toBeUndefined()
+    // A workspace sessionIds entry with no matching list summary (e.g. not yet
+    // loaded) must not throw on the optional-chained lookup.
+    const banner3 = deriveEscalationBanner(board, sessionList([]), workspace('w1', ['not-yet-loaded']))
+    expect(banner3?.matchedSessionId).toBeUndefined()
   })
 
   it('answers no match when the workspace itself is unresolved (e.g. an ungrouped selection)', () => {

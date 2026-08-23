@@ -377,6 +377,22 @@ describe('workspaces', () => {
     await runtime.dispose()
   })
 
+  it('records ensure() calls and seed() installs a workspace board entry directly on ctx.crewBoard', async () => {
+    const runtime = await runtimeWithFrame()
+    expect(runtime.crewBoard.list.getSnapshot()).toEqual({ byWorkspaceId: {} })
+    expect(runtime.crewBoard.ensured).toEqual([])
+
+    runtime.crewBoard.ensure('w1' as WorkspaceId)
+    expect(runtime.crewBoard.ensured).toEqual(['w1'])
+    // ensure() alone does not install an entry (it only records the pull request).
+    expect(runtime.crewBoard.list.getSnapshot().byWorkspaceId['w1' as WorkspaceId]).toBeUndefined()
+
+    const entry = { roster: [], tickets: [], state: 'idle' as const, phase: 'ready' as const, error: null }
+    runtime.crewBoard.seed('w1' as WorkspaceId, entry)
+    expect(runtime.crewBoard.list.getSnapshot().byWorkspaceId['w1' as WorkspaceId]).toEqual(entry)
+    await runtime.dispose()
+  })
+
   it('records the browse calls: listDirectory serves an empty home, createDirectory joins, stubs override', async () => {
     const runtime = await runtimeWithFrame()
     // Defaults: an empty home level and parent/name joining.

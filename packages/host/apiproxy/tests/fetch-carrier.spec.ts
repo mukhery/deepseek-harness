@@ -435,6 +435,12 @@ describe('unary round trip (handler ⇄ client, no network)', () => {
     expect(skills.result).toEqual({ ok: true, value: { skills: [{ name: 'commit-helper', description: 'Git commits', modelInvocable: true }] } })
   })
 
+  it('round-trips crew.board through the wire form', async () => {
+    const c = client()
+    const board = await c.crew.board({ workspaceId: 'w1' as never })
+    expect(board.result).toEqual({ ok: true, value: { roster: [], tickets: [] } })
+  })
+
   it('lets host.pickDirectory finish after the 30-second default unary deadline', async () => {
     vi.useFakeTimers()
     const timeoutSpy = vi.spyOn(AbortSignal, 'timeout').mockImplementation((milliseconds) => {

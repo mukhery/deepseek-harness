@@ -97,8 +97,14 @@ export function deriveEscalationBanner(
   sessions: SessionListState,
   workspace: WorkspaceView | undefined,
 ): CrewEscalationBannerState | undefined {
-  const blockedTickets = deriveCrewColumns(board)
-    .find(column => column.key === 'blocked')?.tickets ?? []
+  // Filters board.tickets directly rather than reusing deriveCrewColumns:
+  // that derivation always returns a 'blocked' column (CREW_COLUMN_ORDER
+  // fixes it as one of six always-present keys), so finding it back out
+  // would need a defensive fallback for a case that cannot occur.
+  const labelBySession = new Map(board.roster.map(member => [member.memberSessionId, member.label]))
+  const blockedTickets = board.tickets
+    .filter(ticket => ticket.status === 'blocked')
+    .map(ticket => crewTicketNode(ticket, labelBySession))
   if (blockedTickets.length === 0) return undefined
   const matchedSessionId = workspace?.sessionIds
     .map(sessionId => sessions.byId[sessionId])
