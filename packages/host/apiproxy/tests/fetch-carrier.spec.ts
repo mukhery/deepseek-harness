@@ -192,6 +192,11 @@ function fakeApi(overrides: Partial<{ muxFrames: MuxFrame[]; hostFrames: HostFra
         return { rpcId: request.rpcId, result: { ok: true, value: { archivedSessionIds: [request.payload.sessionId] } } }
       },
     },
+    crew: {
+      async board(request) {
+        return { rpcId: request.rpcId, result: { ok: true, value: { roster: [], tickets: [] } } }
+      },
+    },
     agentPresets: {
       list(request: RpcRequest<{}>) {
         return Promise.resolve({
