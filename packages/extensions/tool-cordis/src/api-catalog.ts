@@ -3037,10 +3037,6 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export interface CrewReadPoolFilter {\n    readonly workspaceId: WorkspaceId;\n    readonly topics?: readonly string[];\n    readonly since?: string;\n}',
   },
   {
-    name: 'CrewRole',
-    declaration: 'export type CrewRole = \'director\' | \'researcher\' | \'strategist\' | \'engineer\' | \'reviewer\';',
-  },
-  {
     name: 'CrewRosterRecord',
     declaration: 'export type CrewRosterRecord = z.infer<typeof crewRosterRecord>;',
   },
