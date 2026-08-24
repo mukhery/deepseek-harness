@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, createEvent, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { bindSnapshotSelector } from '@deepseek-ai/dsh-client-web-react'
 import type {
-  SessionId, SessionListState, SessionSummary, WorkspaceId, WorkspaceListState, WorkspaceView,
+  CrewBoardsState, SessionId, SessionListState, SessionSummary, WorkspaceId, WorkspaceListState, WorkspaceView,
 } from '@deepseek-ai/dsh-client-runtime/client'
 import { makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
 import { zh as commonZh } from '@deepseek-ai/dsh-client-locale/src/locales/zh.ts'
@@ -80,6 +80,8 @@ function mount(overrides: Partial<WorkspaceBrowserProps> = {}) {
     insertSessionBefore: vi.fn(async () => {}),
     createWorkspace: vi.fn(async () => workspace('created', [])),
     useDirectoryFlow: bindSnapshotSelector({ getSnapshot: () => true, subscribe: () => () => {} }),
+    useCrewBoard: bindSnapshotSelector<CrewBoardsState>({ getSnapshot: () => ({ byWorkspaceId: {} }), subscribe: () => () => {} }),
+    ensureCrewBoard: vi.fn(),
     renderSlot: ((_name: string, owner: { open: boolean }) => (owner.open ? <div data-testid="directory-flow" /> : null)) as never,
     t,
     ...overrides,
@@ -123,7 +125,10 @@ describe('WorkspaceBrowser', () => {
       useSessions: hook(sessions),
       useWorkspaces: hook(workspaceState([workspace('alpha', ['alpha-s']), workspace('beta', ['beta-s'])])),
     })
-    expect(screen.getByText('工作区')).toBeTruthy()
+    // The section header is a static Sessions/Crew tab switch (not a
+    // groupBy-driven title): both tabs render regardless of groupBy.
+    expect(screen.getByRole('tab', { name: '会话' })).toBeTruthy()
+    expect(screen.getByRole('tab', { name: '协作团队' })).toBeTruthy()
     expect(screen.getByText('alpha')).toBeTruthy()
     // Sessions hidden while their group is folded.
     expect(screen.queryByText('alpha-s')).toBeNull()
@@ -137,9 +142,8 @@ describe('WorkspaceBrowser', () => {
     expect(screen.getByRole('menuitem', { name: '按工作区' }).querySelector('svg')).toBeTruthy()
     expect(screen.getByRole('menuitem', { name: '手动排序' }).querySelector('svg')).toBeTruthy()
     fireEvent.click(screen.getByRole('menuitem', { name: '单列表' }))
-    // Store-driven flip: title changes, rows flatten newest-first, headers gone.
+    // Store-driven flip: rows flatten newest-first, workspace headers gone.
     expect(b.store.getSnapshot().groupBy).toBe('flat')
-    expect(screen.getByText('会话')).toBeTruthy()
     expect(screen.queryByText('alpha')).toBeNull()
     expect(screen.getByText('alpha-s')).toBeTruthy()
     expect(screen.getByText('beta-s')).toBeTruthy()
@@ -149,7 +153,6 @@ describe('WorkspaceBrowser', () => {
     expect(screen.getByRole('menuitem', { name: '手动排序' }).hasAttribute('disabled')).toBe(false)
     fireEvent.click(screen.getByRole('menuitem', { name: '按工作区' }))
     expect(b.store.getSnapshot().groupBy).toBe('workspace')
-    expect(screen.getByText('工作区')).toBeTruthy()
 
     // Escape closes the menu without picking.
     fireEvent.click(screen.getByRole('button', { name: '视图选项' }))
@@ -1130,5 +1133,43 @@ describe('WorkspaceBrowser', () => {
     fireEvent.change(screen.getByPlaceholderText('搜索会话…'), { target: { value: 'needle' } })
     const row = screen.getByText('Needle A').closest('[role="treeitem"]') as HTMLElement
     expect(row.hasAttribute('draggable')).toBe(false)
+  })
+
+  it('switches to the Crew tab and renders the board scoped to the current session\'s workspace', () => {
+    const ensureCrewBoard = vi.fn()
+    const board: CrewBoardsState = {
+      byWorkspaceId: {
+        [wid('alpha')]: {
+          state: 'idle', phase: 'ready', error: null,
+          roster: [{
+            memberSessionId: sid('eng-1'), workspaceId: wid('alpha'), role: 'engineer',
+            label: 'Engineer #1', hiredAt: '2026-08-01T00:00:00.000Z',
+          }],
+          tickets: [{
+            id: 't1' as never, workspaceId: wid('alpha'), title: 'Fix the flake', objective: 'Stabilize CI',
+            role: 'engineer', status: 'blocked', assigneeSessionId: sid('eng-1'), blockedReason: 'needs input',
+            citesMessageIds: [], createdAt: '2026-08-01T00:00:00.000Z', updatedAt: '2026-08-01T00:00:00.000Z',
+          }],
+        },
+      },
+    }
+    mount({
+      useSessions: hook(sessionState([summary('alpha-s', 1)], { current: sid('alpha-s') })),
+      useWorkspaces: hook(workspaceState([workspace('alpha', ['alpha-s'])])),
+      useCrewBoard: hook(board),
+      ensureCrewBoard,
+    })
+    fireEvent.click(screen.getByRole('tab', { name: '协作团队' }))
+    expect(ensureCrewBoard).toHaveBeenCalledWith('alpha')
+    // Both the escalation banner and the ticket card itself show the ticket's
+    // title and blockedReason excerpt.
+    expect(screen.getAllByText('Fix the flake')).toHaveLength(2)
+    expect(screen.getAllByText('needs input')).toHaveLength(2)
+    // The escalation banner shows (1 blocked ticket), with no CTA since no
+    // Director session is mid-question in this fixture. Copy is Chinese: this
+    // suite pins zh-CN (usePinnedBrowserLanguages) and stubs `t` from the
+    // package's own zh dictionary.
+    expect(screen.getByText('1 个工单受阻，需要你的处理。')).toBeTruthy()
+    expect(screen.queryByRole('button', { name: '前往会话' })).toBeNull()
   })
 })

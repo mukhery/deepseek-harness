@@ -61,3 +61,5 @@ Shepherd's other two mechanisms were considered and left out. **Live supervision
 ## Consequences
 
 Bought: a workspace-wide crew fact that any number of sessions can safely share and mutate without a new persistence mechanism, reusing exactly the seam `dsh-workspace` already proved out; four fewer preset directories than planned, since hired-member identity rides `dsh-subagent`'s existing per-child `persona`/`toolFilter` mechanism instead. Cost: every `ctx.crew` caller must pass an explicit `workspaceId` (or load one from a ticket/roster record) rather than reading it from ambient session state, since the domain itself carries no notion of "the current session's workspace" — each tool package resolves it itself via `ctx.workspaceRegistry.resolveByPath(agent.session.header.cwd)`, an uncached realpath lookup per call, acceptable at this feature's call volume.
+
+This state was write-only from the product UI's perspective until the [crew progress-monitoring panel](2026-08-23-crew-progress-monitoring-panel.md) added a read-only host-plane projection and sidebar board over it.

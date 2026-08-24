@@ -2,7 +2,7 @@
 // data source on a real clock; behavior tests need per-case responses and
 // deferred-controlled timing). Streams are hand pumps: pushMux/pushHost.
 import type {
-  ClientResponse, HostFrame, IApiClient, ModelSelection, MuxFrame,
+  ClientResponse, CrewRosterView, CrewTicketView, HostFrame, IApiClient, ModelSelection, MuxFrame,
   RpcError, RpcReceipt, RpcRequest, RpcResponse, SessionId, SessionModels, SessionSearchItem, SkillEntry,
   WorkspaceId, WorkspaceView,
 } from '@deepseek-ai/dsh-api-remotes/client'
@@ -219,6 +219,13 @@ export class FakeApiClient implements IApiClient {
       this.record('workspace.insertSessionBefore', payload, this.onWorkspaceInsertSessionBefore(payload)),
     archiveSession: (payload: unknown) =>
       this.record('workspace.archiveSession', payload, this.onWorkspaceArchiveSession(payload)),
+  }
+
+  onCrewBoard: (payload: unknown) => Promise<RpcResponse<{ roster: CrewRosterView[]; tickets: CrewTicketView[] }>> =
+    () => Promise.resolve(ok({ roster: [], tickets: [] }))
+
+  readonly crew: IApiClient['crew'] = {
+    board: (payload: unknown) => this.record('crew.board', payload, this.onCrewBoard(payload)),
   }
 
   // Payloads stay `unknown` (lint-lane note above); response rows are the real

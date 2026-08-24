@@ -16,6 +16,7 @@ import type { ToolCallView, ToolResultView } from '@deepseek-ai/dsh-tools/presen
 import type { RpcError, RpcId, RpcRequest } from './rpc.ts'
 import type { JobView } from './jobs.ts'
 import type { WorkspaceView } from './workspace.ts'
+import type { CrewRosterView, CrewTicketView } from './crew.ts'
 
 // Client-side consumers take the render-intent vocabulary from the contract;
 // dsh-tools remains its owner.
@@ -122,7 +123,10 @@ export type MuxFrame =
  * session-log deletion; workspace-order-changed pushes the complete durable
  * registry order after a reorder; archived-sessions-changed pushes the full registry
  * archive set after every durable change (same full-snapshot posture as
- * workspace-changed — `workspace.list` re-baselines it on reconnect).
+ * workspace-changed — `workspace.list` re-baselines it on reconnect);
+ * crew-board-changed pushes the complete roster+ticket snapshot for one
+ * workspace after every durable crew-domain commit affecting it (same
+ * full-snapshot posture — `crew.board` re-baselines it on reconnect).
  */
 export type HostFrame =
   | {
@@ -141,6 +145,12 @@ export type HostFrame =
   | { type: 'host/workspace-removed'; workspaceId: WorkspaceView['workspaceId'] }
   | { type: 'host/workspace-order-changed'; workspaceIds: WorkspaceView['workspaceId'][] }
   | { type: 'host/archived-sessions-changed'; archivedSessionIds: SessionId[] }
+  | {
+    type: 'host/crew-board-changed'
+    workspaceId: WorkspaceView['workspaceId']
+    roster: CrewRosterView[]
+    tickets: CrewTicketView[]
+  }
   /**
    * One allowlisted host cordis event forwarded verbatim. The allowlist is
    * owned by `@deepseek-ai/dsh-api-remotes` (`API_REMOTE_FORWARDED_EVENTS`),

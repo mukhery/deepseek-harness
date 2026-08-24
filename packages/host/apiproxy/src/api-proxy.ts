@@ -27,6 +27,10 @@ import {
   workspaceDomainState, workspaceRecord, WorkspaceId as brandWorkspaceId,
   WorkspaceMoveInvalidError, WorkspaceOrderInvalidError, WorkspaceUnknownSessionError,
 } from '@deepseek-ai/dsh-workspace'
+// Type-only: resolves `ctx.get('crew')` to the optional crew roster/ticket runtime.
+import type {} from '@deepseek-ai/dsh-crew'
+import { crewRosterRecord, crewTicketRecord } from '@deepseek-ai/dsh-crew'
+import type { CrewRosterRecord, CrewTicketRecord } from '@deepseek-ai/dsh-crew'
 // Type-only: brings the `ctx.tools` Context merge into this program (viewFor reads presenters).
 import {
   InvalidPresetIdError, PresetExistsError, PresetMountError,
@@ -39,7 +43,7 @@ import type {
   ModelCatalogFailure, ModelProviderGroup,
   ModelReasoning, MuxFrame, PromptContentPart, QuestionResponsePayload, SessionListMetadata, SessionProjectionsBlock, SessionSearchItem,
   QueuedInboxItem, SessionSummary, SettingsNamespaceView, SubagentAddress, JobView, ToolEventView,
-  WorkspaceId, WorkspaceView,
+  WorkspaceId, WorkspaceView, CrewRosterView, CrewTicketView,
 } from './api/index.ts'
 import {
   DEFAULT_SESSION_LOG_COMPRESSION_LEVEL,
@@ -1063,6 +1067,47 @@ function changedWorkspaceView(workspaceId: string, value: unknown): WorkspaceVie
     sessionIds: [...record.sessionIds],
     createdAt: record.createdAt,
     updatedAt: record.updatedAt,
+  }
+}
+
+/** Wire projection of one crew roster record (the crew.board roster row). Identity: every field is already client-safe. */
+function crewRosterView(record: CrewRosterRecord): CrewRosterView {
+  return {
+    memberSessionId: record.memberSessionId,
+    workspaceId: record.workspaceId,
+    role: record.role,
+    label: record.label,
+    hiredAt: record.hiredAt,
+  }
+}
+
+/** Wire projection of one crew ticket record (the crew.board ticket row). Identity: every field is already client-safe. */
+function crewTicketView(record: CrewTicketRecord): CrewTicketView {
+  return {
+    id: record.id,
+    workspaceId: record.workspaceId,
+    title: record.title,
+    objective: record.objective,
+    role: record.role,
+    status: record.status,
+    ...record.assigneeSessionId === undefined ? {} : { assigneeSessionId: record.assigneeSessionId },
+    ...record.evidence === undefined ? {} : { evidence: record.evidence },
+    ...record.summary === undefined ? {} : { summary: record.summary },
+    ...record.prUrl === undefined ? {} : { prUrl: record.prUrl },
+    ...record.verdictRationale === undefined ? {} : { verdictRationale: record.verdictRationale },
+    ...record.blockedReason === undefined ? {} : { blockedReason: record.blockedReason },
+    citesMessageIds: record.citesMessageIds.map(id => id as string),
+    createdAt: record.createdAt,
+    updatedAt: record.updatedAt,
+  }
+}
+
+/** Read one workspace's full crew board (empty when `ctx.crew` is not mounted — an optional host service). */
+function crewBoardFor(ctx: Context, workspaceId: WorkspaceId): { roster: CrewRosterView[]; tickets: CrewTicketView[] } {
+  const crew = ctx.get('crew')
+  return {
+    roster: (crew?.roster(workspaceId) ?? []).map(crewRosterView),
+    tickets: (crew?.tickets(workspaceId) ?? []).map(crewTicketView),
   }
 }
 
@@ -2860,6 +2905,12 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
       },
     },
 
+    crew: {
+      board(request) {
+        return Promise.resolve(ok(request, crewBoardFor(ctx, brandWorkspaceId(request.payload.workspaceId))))
+      },
+    },
+
     host: {
       describe(request) {
         // TODO: version should read apps/cli's package.json; placeholder for now.
@@ -3549,6 +3600,28 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
             queue.push(frame({
               type: 'host/workspace-changed',
               workspace: changedWorkspaceView(change.key, change.value),
+            }))
+          }),
+          // Crew domain: roster and tickets are both self-scoped by an
+          // explicit workspaceId field on every record (see spec.ts), so
+          // unlike the workspace domain's own two-level global/table split,
+          // no committed-set baseline is needed here — each commit already
+          // names the workspace to recompute and push. The message pool
+          // (`messages` table) is out of scope for this projection. Crew
+          // records are only ever put/updated, never deleted (see
+          // `CrewRuntime`), so a `deleted` operation cannot occur in practice;
+          // it is ignored defensively rather than asserted unreachable.
+          ctx.on('domain/changed', (change) => {
+            if (change.domain !== 'crew') return
+            if (change.table !== 'roster' && change.table !== 'tickets') return
+            if (change.operation !== 'put') return
+            const workspaceId = change.table === 'roster'
+              ? crewRosterRecord.parse(change.value).workspaceId
+              : crewTicketRecord.parse(change.value).workspaceId
+            queue.push(frame({
+              type: 'host/crew-board-changed',
+              workspaceId,
+              ...crewBoardFor(ctx, workspaceId),
             }))
           }),
           // Allowlisted host events ride one verbatim wrapper frame each. The

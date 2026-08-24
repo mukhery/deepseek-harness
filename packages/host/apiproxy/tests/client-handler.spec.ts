@@ -89,6 +89,9 @@ function scriptedApi(overrides: {
       insertSessionBefore: r => ok(r, { workspace: { workspaceId: 'w1' as never, path: '/t', title: 't', sessionIds: [], createdAt: '0', updatedAt: '0' } }),
       archiveSession: r => ok(r, { archivedSessionIds: [r.payload.sessionId] }),
     },
+    crew: {
+      board: r => ok(r, { roster: [], tickets: [] }),
+    },
     skills: { list: r => ok(r, { skills: [] }), ...overrides.skills },
     agentPresets: {
       list: r => ok(r, { presets: [], authorable: false, hasDocument: false }),

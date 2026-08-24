@@ -26,6 +26,7 @@
     "tests/scaffold-hermetic.e2e.ts",
     "tests/minimal-preset.snapshot.ts",
     "tests/crew-director-preset.snapshot.ts",
+    "tests/crew-board.e2e.ts",
     "tests/message-feedback-protocol.snapshot.ts",
     "tests/live-interactions.e2e.ts",
     "tests/question-composer.e2e.ts",

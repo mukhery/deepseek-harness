@@ -192,6 +192,11 @@ function fakeApi(overrides: Partial<{ muxFrames: MuxFrame[]; hostFrames: HostFra
         return { rpcId: request.rpcId, result: { ok: true, value: { archivedSessionIds: [request.payload.sessionId] } } }
       },
     },
+    crew: {
+      async board(request) {
+        return { rpcId: request.rpcId, result: { ok: true, value: { roster: [], tickets: [] } } }
+      },
+    },
     agentPresets: {
       list(request: RpcRequest<{}>) {
         return Promise.resolve({
@@ -428,6 +433,12 @@ describe('unary round trip (handler ⇄ client, no network)', () => {
     const c = client()
     const skills = await c.skills.list({ sessionId: 's' as never })
     expect(skills.result).toEqual({ ok: true, value: { skills: [{ name: 'commit-helper', description: 'Git commits', modelInvocable: true }] } })
+  })
+
+  it('round-trips crew.board through the wire form', async () => {
+    const c = client()
+    const board = await c.crew.board({ workspaceId: 'w1' as never })
+    expect(board.result).toEqual({ ok: true, value: { roster: [], tickets: [] } })
   })
 
   it('lets host.pickDirectory finish after the 30-second default unary deadline', async () => {

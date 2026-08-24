@@ -33,6 +33,7 @@ import {
   agentPresetEntrySchema, agentPresetListValueSchema, agentPresetOpenDocumentValueSchema,
 } from '../src/api/agent-presets.schema.ts'
 import { hostFrameSchema, muxFrameSchema, askUserQuestionItemSchema } from '../src/api/events.schema.ts'
+import { crewBoardRequestSchema, crewBoardValueSchema, crewRosterViewSchema, crewTicketViewSchema } from '../src/api/crew.schema.ts'
 import { approvalRequestIdSchema, approvalResponsePayloadSchema } from '../src/api/approvals.schema.ts'
 import { askUserQuestionAnswerSchema, questionResponsePayloadSchema } from '../src/api/questions.schema.ts'
 import { goalEditRequestSchema } from '../src/api/goals.schema.ts'
@@ -405,6 +406,48 @@ describe('workspace domain schemas', () => {
     expect(() => workspaceInsertBeforeRequestSchema.parse({ beforeWorkspaceId: 'w2' })).toThrow()
     expect(workspaceInsertBeforeValueSchema.parse({ workspaceIds: ['w2', 'w1'] }).workspaceIds)
       .toEqual(['w2', 'w1'])
+  })
+})
+
+describe('crew domain schemas', () => {
+  const roster = {
+    memberSessionId: 's1', workspaceId: 'w1', role: 'engineer', label: 'Engineer #1', hiredAt: '2026-08-01T00:00:00.000Z',
+  }
+  const ticket = {
+    id: 't1', workspaceId: 'w1', title: 'Fix it', objective: 'Make tests pass', role: 'engineer', status: 'blocked',
+    assigneeSessionId: 's1', blockedReason: 'need input', citesMessageIds: [],
+    createdAt: '2026-08-01T00:00:00.000Z', updatedAt: '2026-08-01T00:00:01.000Z',
+  }
+
+  it('validates the roster and ticket rows, including every role and status literal', () => {
+    expect(crewRosterViewSchema.parse(roster).role).toBe('engineer')
+    for (const role of ['director', 'researcher', 'strategist', 'engineer', 'reviewer']) {
+      expect(crewRosterViewSchema.parse({ ...roster, role }).role).toBe(role)
+    }
+    expect(() => crewRosterViewSchema.parse({ ...roster, role: 'ceo' })).toThrow()
+    expect(crewTicketViewSchema.parse(ticket)).toMatchObject({ id: 't1', status: 'blocked' })
+    for (const status of ['open', 'assigned', 'in-progress', 'in-review', 'done', 'blocked']) {
+      expect(crewTicketViewSchema.parse({ ...ticket, status }).status).toBe(status)
+    }
+    expect(() => crewTicketViewSchema.parse({ ...ticket, status: 'cancelled' })).toThrow()
+    // Optional ticket fields (evidence/summary/prUrl/verdictRationale/blockedReason) are absent by default.
+    const { blockedReason: _blockedReason, assigneeSessionId: _assigneeSessionId, ...minimal } = ticket
+    expect(crewTicketViewSchema.parse(minimal).blockedReason).toBeUndefined()
+  })
+
+  it('validates crew.board request/value', () => {
+    expect(crewBoardRequestSchema.parse({ workspaceId: 'w1' }).workspaceId).toBe('w1')
+    expect(() => crewBoardRequestSchema.parse({})).toThrow()
+    expect(crewBoardValueSchema.parse({ roster: [roster], tickets: [ticket] }).roster).toHaveLength(1)
+    expect(crewBoardValueSchema.parse({ roster: [], tickets: [] })).toEqual({ roster: [], tickets: [] })
+  })
+
+  it('carries a crew.board increment on host/crew-board-changed and rejects an unknown role', () => {
+    const frame = {
+      type: 'host/crew-board-changed', workspaceId: 'w1', roster: [roster], tickets: [ticket],
+    }
+    expect(hostFrameSchema.parse(frame)).toMatchObject({ type: 'host/crew-board-changed' })
+    expect(() => hostFrameSchema.parse({ ...frame, roster: [{ ...roster, role: 'ceo' }] })).toThrow()
   })
 })
 
