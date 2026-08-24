@@ -26,7 +26,7 @@ This table connects model-visible tool names to the plugin package and service s
 | `@deepseek-ai/dsh-tool-fs` | `edit`, `read`, `read_image`, `write` | `ctx.tools`, `ctx.fs`, `ctx.systemPrompt`, `ctx.attachments (read_image registration)`, `ctx.llm + an image-capable route (read_image execution)` | `tool/call`, `fs/write-intent or fs/edit-intent for mutations`, `fs/observed after read presence/absence or successful file operation`, `durable attachment (read_image)`, `tool/result` | - | The read-before-write/edit policy is added by `@deepseek-ai/dsh-fs-observation-policy` (an `fs/*` event-gate plugin, no schema change); a deployment that loads these tools is expected to also load it. `read_image` is not registered without `ctx.attachments`; its schema is route-independent, and execution refuses unless the exact routed model declares image input. |
 | `@deepseek-ai/dsh-tool-fs-search` | `glob`, `grep` | `ctx.tools`, `ctx.subprocess`, `ctx.systemPrompt` | `tool/call`, `tool/result` | - | glob and grep are unconditional discovery tools that spawn the packaged ripgrep binary (`@vscode/ripgrep`) through ctx.subprocess as ordinary foreground calls (never background jobs) — no host `rg` install and no shell layer. The catalog uses `sampleOverCapGlobResults: true`; deployments must choose that behavior explicitly. Capped results save the complete formatted list through the optional ctx.spillStore backend; returned locators are follow-up-readable/searchable when the backend exposes local paths in co-located deployments. |
 | `@deepseek-ai/dsh-tool-crew-director` | `crew_assign_ticket`, `crew_board`, `crew_hire`, `crew_open_ticket` | `ctx.tools`, `ctx.crew`, `ctx.subagents`, `ctx.workspaceRegistry`, `a calling Agent with a workspace-registered cwd` | `tool/call`, `crew domain roster/ticket records for mutations`, `tool/result` | - | crew_hire delivers each hired role's identity inline through SubagentStartRequest.persona/toolFilter, not a preset; crew_assign_ticket also delivers the ticket objective as the member's next turn through ctx.subagents.followup. |
-| `@deepseek-ai/dsh-tool-crew-member` | `crew_publish`, `crew_read_pool`, `crew_report` | `ctx.tools`, `ctx.crew`, `ctx.workspaceRegistry`, `a calling Agent with a workspace-registered cwd` | `tool/call`, `crew domain ticket/message records for mutations`, `tool/result` | - | crew_report never sets a ticket done; only dsh-tool-crew-review's crew_verdict does. |
+| `@deepseek-ai/dsh-tool-crew-member` | `crew_publish`, `crew_read_pool`, `crew_report`, `crew_start_work` | `ctx.tools`, `ctx.crew`, `ctx.workspaceRegistry`, `a calling Agent with a workspace-registered cwd` | `tool/call`, `crew domain ticket/message records for mutations`, `tool/result` | - | crew_report never sets a ticket done; only dsh-tool-crew-review's crew_verdict does. |
 | `@deepseek-ai/dsh-tool-crew-review` | `crew_verdict` | `ctx.tools`, `ctx.crew`, `a calling Agent` | `tool/call`, `crew domain ticket records for mutations`, `tool/result` | - | crew_verdict is the sole path that can set a ticket done; a deployment exposes it only through a hired reviewer's toolFilter. |
 | `@deepseek-ai/dsh-tool-terminal` | `terminal_close`, `terminal_list`, `terminal_open`, `terminal_read`, `terminal_send`, `terminal_signal` | `ctx.tools`, `ctx.terminals`, `ctx.systemPrompt`, `ctx.jobs at call time for run_in_background` | `tool/call`, `tool/result` | - | The six terminal tools are opt-in and complement one-shot shell/filesystem tools. `terminal_send(run_in_background: true)` registers with `ctx.jobs`; TUI, named key sequences, BEL, resize, auto-start, and cross-agent sharing are absent from the schema. |
 | `@deepseek-ai/dsh-tool-goal` | `create_goal`, `get_goal`, `update_goal` | `ctx.tools`, `ctx.agents`, `ctx.goals`, `ctx.systemPrompt`, `a calling Agent in an authorized open turn` | `tool/call`, `goal/change for mutations`, `tool/result` | - | create, edit, pause, and resume require direct-human root authority; complete and blocked also accept the exact current goal round. The default blocked lower bound is three admitted rounds. |
@@ -1003,6 +1003,27 @@ Report on your currently assigned crew ticket. "ready_for_review" submits eviden
   "required": [
     "ticket_id",
     "outcome"
+  ]
+}
+```
+
+Source: [`packages/crew/tool-crew-member/src/index.ts`](../packages/crew/tool-crew-member/src/index.ts)
+
+### `crew_start_work`
+
+Mark your assigned ticket as actively being worked (assigned -> in-progress), so the crew board reflects real progress instead of an idle assignment. Optional — crew_report still works directly from "assigned" — but call this when you begin so the Director and reviewer can see the difference between "not started" and "in progress".
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "ticket_id": {
+      "type": "string",
+      "description": "The ticket id you are starting work on."
+    }
+  },
+  "required": [
+    "ticket_id"
   ]
 }
 ```

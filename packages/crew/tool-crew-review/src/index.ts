@@ -7,10 +7,11 @@
 
 import type { Context } from '@deepseek-ai/cordis'
 import type { JsonValue } from '@deepseek-ai/dsh-session'
+import type { CrewTicketRecord } from '@deepseek-ai/dsh-crew'
 import { CrewTicketId } from '@deepseek-ai/dsh-crew'
 import { HarnessError } from '@deepseek-ai/dsh-llm'
 import { defineTool } from '@deepseek-ai/dsh-tools'
-import type { GenericCallView } from '@deepseek-ai/dsh-tools'
+import type { GenericCallView, ToolResult, ToolResultView } from '@deepseek-ai/dsh-tools'
 
 export const name = 'tool-crew-review'
 export const inject = ['crew', 'tools']
@@ -18,6 +19,17 @@ export const inject = ['crew', 'tools']
 /** Strip undefined-valued optional fields so a domain record satisfies the tool JSON output type. */
 function compact(value: Record<string, unknown>): Record<string, JsonValue> {
   return Object.fromEntries(Object.entries(value).filter(([, v]) => v !== undefined)) as Record<string, JsonValue>
+}
+
+/** Render a verdicted ticket's new state as a human-readable line for a UI without a dedicated crew card. */
+function presentVerdictResult(_args: unknown, result: ToolResult): ToolResultView | undefined {
+  if (result.isError) return undefined
+  const ticket = result.meta as unknown as CrewTicketRecord
+  const text = ticket.status === 'done'
+    ? `Ticket "${ticket.title}" (${ticket.id}) accepted: ${ticket.verdictRationale}`
+      + (ticket.prUrl === undefined ? '' : ` (PR: ${ticket.prUrl})`)
+    : `Ticket "${ticket.title}" (${ticket.id}) rejected, returned to assignee: ${ticket.verdictRationale}`
+  return { card: 'generic', content: [{ type: 'text', text }] }
 }
 
 /** Register the `crew_verdict` tool. */
@@ -37,6 +49,9 @@ export function apply(ctx: Context): void {
     output: {
       schema: { type: 'object', additionalProperties: true } as const,
       render: (_args: unknown, value: unknown) => [{ type: 'text' as const, text: JSON.stringify(value) }],
+      // Projects the same canonical value `render` serializes, so presentResult reads it back
+      // structured instead of re-parsing the model-facing JSON text.
+      presentationMeta: (_args: unknown, value: JsonValue) => value,
     },
     async execute(args, exec) {
       const agent = exec.agent
@@ -56,5 +71,6 @@ export function apply(ctx: Context): void {
       return compact(ticket)
     },
     presentCall: args => ({ card: 'generic', title: 'Verdict ticket', kind: 'other', rawInput: args.ticket_id }) satisfies GenericCallView,
+    presentResult: presentVerdictResult,
   }))
 }

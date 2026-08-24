@@ -11,12 +11,12 @@
 import type { Context } from '@deepseek-ai/cordis'
 import type { JsonValue } from '@deepseek-ai/dsh-session'
 import z from '@deepseek-ai/schemastery'
-import type { CrewRole } from '@deepseek-ai/dsh-crew'
+import type { CrewRole, CrewRosterRecord, CrewTicketRecord } from '@deepseek-ai/dsh-crew'
 import { CrewMessageId, CrewTicketId } from '@deepseek-ai/dsh-crew'
 import { HarnessError } from '@deepseek-ai/dsh-llm'
 import { SessionId } from '@deepseek-ai/dsh-session'
 import { defineTool } from '@deepseek-ai/dsh-tools'
-import type { GenericCallView, ToolRunContext } from '@deepseek-ai/dsh-tools'
+import type { GenericCallView, ToolResult, ToolResultView, ToolRunContext } from '@deepseek-ai/dsh-tools'
 import type {} from '@deepseek-ai/dsh-workspace'
 import type {} from '@deepseek-ai/dsh-subagent'
 
@@ -28,21 +28,24 @@ const HIREABLE_ROLES: HireableRole[] = ['researcher', 'strategist', 'engineer', 
 
 /** The crew tools fixed to each hired role — protocol constants, not deployment config. */
 const CREW_TOOLS_BY_ROLE: Record<HireableRole, readonly string[]> = {
-  researcher: ['crew_report', 'crew_publish', 'crew_read_pool'],
-  strategist: ['crew_report', 'crew_publish', 'crew_read_pool', 'crew_open_ticket'],
-  engineer: ['crew_report', 'crew_publish', 'crew_read_pool'],
+  researcher: ['crew_report', 'crew_publish', 'crew_read_pool', 'crew_start_work'],
+  strategist: ['crew_report', 'crew_publish', 'crew_read_pool', 'crew_open_ticket', 'crew_start_work'],
+  engineer: ['crew_report', 'crew_publish', 'crew_read_pool', 'crew_start_work'],
   reviewer: ['crew_verdict', 'crew_read_pool'],
 }
 
 const ROLE_PERSONA: Record<HireableRole, string> = {
-  researcher: 'You are the Researcher on a crew pursuing a shared project objective. Investigate what you\'re '
-    + 'assigned, and publish findings to the crew pool (crew_publish, kind "finding") so other roles can build '
-    + 'on them without relaying through anyone. Report each assigned ticket with crew_report.',
-  strategist: 'You are the Strategist on a crew pursuing a shared project objective. Read the crew pool '
-    + '(crew_read_pool) for findings, turn them into concrete proposals, and open new tickets for them '
-    + '(crew_open_ticket) citing the findings that motivated each one. Report each assigned ticket with crew_report.',
-  engineer: 'You are the Engineer on a crew pursuing a shared project objective. Implement what you\'re assigned '
-    + 'in your own isolated worktree — `git worktree add <path> -b <branch>` through bash, there is no separate '
+  researcher: 'You are the Researcher on a crew pursuing a shared project objective. Call crew_start_work when '
+    + 'you begin an assigned ticket, so the board reflects real progress. Investigate what you\'re assigned, and '
+    + 'publish findings to the crew pool (crew_publish, kind "finding") so other roles can build on them without '
+    + 'relaying through anyone. Report each assigned ticket with crew_report.',
+  strategist: 'You are the Strategist on a crew pursuing a shared project objective. Call crew_start_work when '
+    + 'you begin an assigned ticket, so the board reflects real progress. Read the crew pool (crew_read_pool) '
+    + 'for findings, turn them into concrete proposals, and open new tickets for them (crew_open_ticket) citing '
+    + 'the findings that motivated each one. Report each assigned ticket with crew_report.',
+  engineer: 'You are the Engineer on a crew pursuing a shared project objective. Call crew_start_work when you '
+    + 'begin an assigned ticket, so the board reflects real progress. Implement what you\'re assigned in your '
+    + 'own isolated worktree — `git worktree add <path> -b <branch>` through bash, there is no separate '
     + 'worktree tool — and push the branch when done. Report with crew_report (evidence should cite the branch '
     + 'name and a diff summary) when ready for review. Your report does not close the ticket or open a PR — a '
     + 'reviewer\'s independent verdict does both.',
@@ -98,6 +101,59 @@ function compact(value: Record<string, unknown>): Record<string, JsonValue> {
 const JSON_OUTPUT = {
   schema: { type: 'object', additionalProperties: true } as const,
   render: (_args: unknown, value: unknown) => [{ type: 'text' as const, text: JSON.stringify(value) }],
+  // Projects the same canonical value `render` serializes, so a UI's presentResult reads it back
+  // structured instead of re-parsing the model-facing JSON text.
+  presentationMeta: (_args: unknown, value: JsonValue) => value,
+}
+
+/** Render a newly hired member as a human-readable line for a UI without a dedicated crew card. */
+function presentHireResult(_args: unknown, result: ToolResult): ToolResultView | undefined {
+  if (result.isError) return undefined
+  const roster = result.meta as unknown as CrewRosterRecord
+  return { card: 'generic', content: [{ type: 'text', text: `Hired ${roster.role} "${roster.label}" (session ${roster.memberSessionId}).` }] }
+}
+
+/** Render a newly opened ticket as a human-readable line for a UI without a dedicated crew card. */
+function presentOpenTicketResult(_args: unknown, result: ToolResult): ToolResultView | undefined {
+  if (result.isError) return undefined
+  const ticket = result.meta as unknown as CrewTicketRecord
+  return {
+    card: 'generic',
+    content: [{ type: 'text', text: `Opened ticket "${ticket.title}" (${ticket.id}) for ${ticket.role}: ${ticket.objective}` }],
+  }
+}
+
+/** Render a newly assigned ticket as a human-readable line for a UI without a dedicated crew card. */
+function presentAssignTicketResult(_args: unknown, result: ToolResult): ToolResultView | undefined {
+  if (result.isError) return undefined
+  const ticket = result.meta as unknown as CrewTicketRecord
+  return {
+    card: 'generic',
+    content: [{
+      type: 'text',
+      text: `Assigned ticket "${ticket.title}" (${ticket.id}) to ${ticket.assigneeSessionId} (status ${ticket.status}).`,
+    }],
+  }
+}
+
+/** One board ticket line: status, title, id, role, and the assignee when the ticket has one. */
+function ticketLine(t: CrewTicketRecord): string {
+  const assignee = t.assigneeSessionId === undefined ? '' : ` assignee:${t.assigneeSessionId}`
+  return `- [${t.status}] "${t.title}" (${t.id}) role:${t.role}${assignee}`
+}
+
+/** Render the roster and ticket board as a human-readable list for a UI without a dedicated crew card. */
+function presentBoardResult(_args: unknown, result: ToolResult): ToolResultView | undefined {
+  if (result.isError) return undefined
+  const { roster, tickets } = result.meta as unknown as { roster: CrewRosterRecord[]; tickets: CrewTicketRecord[] }
+  const rosterLines = roster.length === 0
+    ? '(no members hired)'
+    : roster.map(m => `- ${m.role} "${m.label}" — ${m.memberSessionId}`).join('\n')
+  const ticketLines = tickets.length === 0 ? '(no tickets)' : tickets.map(ticketLine).join('\n')
+  return {
+    card: 'generic',
+    content: [{ type: 'text', text: `Roster (${roster.length}):\n${rosterLines}\n\nTickets (${tickets.length}):\n${ticketLines}` }],
+  }
 }
 
 /** Register the Director tools. */
@@ -130,6 +186,7 @@ export function apply(ctx: Context, config: Config): void {
       return compact(roster)
     },
     presentCall: args => present('Hire crew member', 'other', args.label),
+    presentResult: presentHireResult,
   }))
 
   ctx.tools.register(defineTool({
@@ -158,6 +215,7 @@ export function apply(ctx: Context, config: Config): void {
       return compact(ticket)
     },
     presentCall: args => present('Open crew ticket', 'other', args.title),
+    presentResult: presentOpenTicketResult,
   }))
 
   ctx.tools.register(defineTool({
@@ -181,6 +239,7 @@ export function apply(ctx: Context, config: Config): void {
       return compact(ticket)
     },
     presentCall: args => present('Assign crew ticket', 'other', args.ticket_id),
+    presentResult: presentAssignTicketResult,
   }))
 
   ctx.tools.register(defineTool({
@@ -196,5 +255,6 @@ export function apply(ctx: Context, config: Config): void {
       }
     },
     presentCall: () => present('Read crew board', 'read'),
+    presentResult: presentBoardResult,
   }))
 }

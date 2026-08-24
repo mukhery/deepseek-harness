@@ -12,8 +12,9 @@ const member = SessionId('member-1')
 function harness(cwd: string | undefined) {
   const tools = new Map<string, ToolDefinition>()
   const crew = {
-    submitForReview: vi.fn(async () => ({ id: 't1', status: 'in-review', evidence: 'e', summary: 's' })),
-    submitBlocked: vi.fn(async () => ({ id: 't1', status: 'blocked', blockedReason: 'r' })),
+    submitForReview: vi.fn(async () => ({ id: 't1', title: 'T', status: 'in-review', evidence: 'e', summary: 's' })),
+    submitBlocked: vi.fn(async () => ({ id: 't1', title: 'T', status: 'blocked', blockedReason: 'r' })),
+    startWork: vi.fn(async () => ({ id: 't1', title: 'T', status: 'in-progress' })),
     publish: vi.fn(async () => ({ id: 'm1', workspaceId: workspace, topic: 't', kind: 'finding', body: 'b' })),
     readPool: vi.fn(() => [{ id: 'm1', workspaceId: workspace, topic: 't', kind: 'finding', body: 'b' }]),
   }
@@ -48,7 +49,7 @@ describe('tool-crew-member', () => {
       { ticket_id: 't1', outcome: 'ready_for_review', evidence: 'e', summary: 's' }, exec(),
     )
     expect(crew.submitForReview).toHaveBeenCalledWith('t1', member, 'e', 's')
-    expect(result).toEqual({ id: 't1', status: 'in-review', evidence: 'e', summary: 's' })
+    expect(result).toEqual({ id: 't1', title: 'T', status: 'in-review', evidence: 'e', summary: 's' })
   })
 
   it('crew_report rejects ready_for_review without evidence/summary', async () => {
@@ -61,9 +62,16 @@ describe('tool-crew-member', () => {
     const { tools, crew, exec } = harness('/proj')
     const result = await tools.get('crew_report')!.execute({ ticket_id: 't1', outcome: 'blocked', reason: 'r' }, exec())
     expect(crew.submitBlocked).toHaveBeenCalledWith('t1', member, 'r')
-    expect(result).toEqual({ id: 't1', status: 'blocked', blockedReason: 'r' })
+    expect(result).toEqual({ id: 't1', title: 'T', status: 'blocked', blockedReason: 'r' })
     await expect(tools.get('crew_report')!.execute({ ticket_id: 't1', outcome: 'blocked' }, exec()))
       .rejects.toThrow(/reason is required/)
+  })
+
+  it('crew_start_work marks the ticket in-progress', async () => {
+    const { tools, crew, exec } = harness('/proj')
+    const result = await tools.get('crew_start_work')!.execute({ ticket_id: 't1' }, exec())
+    expect(crew.startWork).toHaveBeenCalledWith('t1', member)
+    expect(result).toEqual({ id: 't1', title: 'T', status: 'in-progress' })
   })
 
   it('crew_publish forwards to ctx.crew.publish, with and without an optional citing ticket', async () => {
@@ -104,9 +112,48 @@ describe('tool-crew-member', () => {
     const { tools } = harness('/proj')
     expect(tools.get('crew_report')!.presentCall!({ ticket_id: 't1', outcome: 'blocked' })).toMatchObject({ kind: 'other' })
     expect(tools.get('crew_publish')!.presentCall!({ topic: 't', kind: 'finding', body: 'b' })).toMatchObject({ kind: 'other' })
+    expect(tools.get('crew_start_work')!.presentCall!({ ticket_id: 't1' })).toMatchObject({ kind: 'other' })
     expect(tools.get('crew_read_pool')!.presentCall!({})).toMatchObject({ kind: 'read' })
     expect(tools.get('crew_read_pool')!.output.render({}, { messages: [] })).toEqual([
       { type: 'text', text: '{"messages":[]}' },
     ])
+    expect(tools.get('crew_read_pool')!.output.presentationMeta!({}, { messages: [] })).toEqual({ messages: [] })
+  })
+
+  it('presents each completed call as a human-readable line, and falls back on error', () => {
+    const { tools } = harness('/proj')
+
+    expect(tools.get('crew_report')!.presentResult!({ ticket_id: 't1', outcome: 'blocked' }, {
+      content: [], isError: false, meta: { id: 't1', title: 'T', status: 'in-review', summary: 's' },
+    })).toEqual({ card: 'generic', content: [{ type: 'text', text: 'Ticket "T" (t1) submitted for review: s' }] })
+    expect(tools.get('crew_report')!.presentResult!({ ticket_id: 't1', outcome: 'blocked' }, {
+      content: [], isError: false, meta: { id: 't1', title: 'T', status: 'blocked', blockedReason: 'r' },
+    })).toEqual({ card: 'generic', content: [{ type: 'text', text: 'Ticket "T" (t1) marked blocked: r' }] })
+    expect(tools.get('crew_report')!.presentResult!({ ticket_id: 't1', outcome: 'blocked' }, { content: [], isError: true }))
+      .toBeUndefined()
+
+    expect(tools.get('crew_start_work')!.presentResult!({ ticket_id: 't1' }, {
+      content: [], isError: false, meta: { id: 't1', title: 'T', status: 'in-progress' },
+    })).toEqual({ card: 'generic', content: [{ type: 'text', text: 'Ticket "T" (t1) marked in-progress.' }] })
+    expect(tools.get('crew_start_work')!.presentResult!({ ticket_id: 't1' }, { content: [], isError: true }))
+      .toBeUndefined()
+
+    expect(tools.get('crew_publish')!.presentResult!({ topic: 't', kind: 'finding', body: 'b' }, {
+      content: [], isError: false, meta: { id: 'm1', topic: 't', kind: 'finding', body: 'b' },
+    })).toEqual({ card: 'generic', content: [{ type: 'text', text: 'Published finding "t": b' }] })
+    expect(tools.get('crew_publish')!.presentResult!({ topic: 't', kind: 'finding', body: 'b' }, { content: [], isError: true }))
+      .toBeUndefined()
+
+    expect(tools.get('crew_read_pool')!.presentResult!({}, {
+      content: [], isError: false, meta: { messages: [] },
+    })).toEqual({ card: 'generic', content: [{ type: 'text', text: 'Crew pool: (no messages)' }] })
+    expect(tools.get('crew_read_pool')!.presentResult!({}, {
+      content: [], isError: false,
+      meta: { messages: [{ id: 'm1', topic: 't', kind: 'finding', from: member, body: 'b', createdAt: '2026-01-01T00:00:00.000Z' }] },
+    })).toEqual({
+      card: 'generic',
+      content: [{ type: 'text', text: `Crew pool (1):\n- [finding] t — ${member} (2026-01-01T00:00:00.000Z): b` }],
+    })
+    expect(tools.get('crew_read_pool')!.presentResult!({}, { content: [], isError: true })).toBeUndefined()
   })
 })

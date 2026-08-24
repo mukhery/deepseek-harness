@@ -93,6 +93,21 @@ describe('CrewRuntime roster and tickets', () => {
     await expect(crew.verdict(ticket.id, impostor, 'accept', 'looks good')).rejects.toThrow(CrewAuthorityError)
   })
 
+  it('rejects a verdict from a reviewer hired into a different workspace', async () => {
+    const { crew } = await harness()
+    const member = SessionId('engineer-1')
+    const foreignReviewer = SessionId('reviewer-2')
+    await crew.hire({ workspaceId: workspace, memberSessionId: member, role: 'engineer', label: 'Engineer' })
+    await crew.hire({ workspaceId: otherWorkspace, memberSessionId: foreignReviewer, role: 'reviewer', label: 'Reviewer' })
+    const ticket = await crew.openTicket({
+      workspaceId: workspace, title: 'Ship X', objective: 'Ship X', role: 'engineer',
+    })
+    await crew.assignTicket(ticket.id, member)
+    await crew.submitForReview(ticket.id, member, 'evidence', 'summary')
+    await expect(crew.verdict(ticket.id, foreignReviewer, 'accept', 'looks good')).rejects.toThrow(CrewAuthorityError)
+    expect(crew.ticket(ticket.id)?.status).toBe('in-review')
+  })
+
   it('blocks a working ticket and reassigns it once resolved', async () => {
     const { crew } = await harness()
     const member = SessionId('engineer-1')

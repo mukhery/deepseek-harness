@@ -1,10 +1,14 @@
 # @deepseek-ai/dsh-tool-crew-member
 
-Model-facing `crew_report`, `crew_publish`, and `crew_read_pool` tools over [`ctx.crew`](../crew/README.md). Mounted inside the `crew-director` preset (never host-global — a host-global row would put these on every other preset's tool catalog too). A hired crew member's actual visibility into these three tools is narrowed by the `toolFilter.allow` list `tool-crew-director`'s `crew_hire` sets at hire time.
+Model-facing `crew_report`, `crew_start_work`, `crew_publish`, and `crew_read_pool` tools over [`ctx.crew`](../crew/README.md). Mounted inside the `crew-director` preset (never host-global — a host-global row would put these on every other preset's tool catalog too). A hired crew member's actual visibility into these tools is narrowed by the `toolFilter.allow` list `tool-crew-director`'s `crew_hire` sets at hire time (a hired `reviewer` never receives `crew_report`/`crew_start_work`/`crew_publish`).
 
 ## `crew_report`
 
-The assignee's structured handoff on their currently assigned ticket. `ready_for_review` submits evidence and a summary and moves the ticket to `in-review` — it never sets `done`; only an independent [`crew_verdict`](../tool-crew-review/README.md) does. `blocked` records why the ticket cannot proceed.
+The assignee's structured handoff on their currently assigned ticket. `ready_for_review` submits evidence and a summary and moves the ticket to `in-review` — it never sets `done`; only an independent [`crew_verdict`](../tool-crew-review/README.md) does. `blocked` records why the ticket cannot proceed. `ready_for_review`/`blocked` both work directly from `assigned`; `crew_start_work` is optional but lets the board distinguish an idle assignment from active work.
+
+## `crew_start_work`
+
+Moves the caller's assigned ticket from `assigned` to `in-progress`. Optional — `crew_report` accepts either status — but the persona each role receives tells it to call this when it begins, so `crew_board` can show whether an assigned ticket has actually been picked up.
 
 ## `crew_publish` / `crew_read_pool`
 
@@ -16,7 +20,7 @@ Publish one structured, topic-tagged message (`finding | decision | handoff | bl
 
 #### What the model sees
 
-The generated [`crew_report`, `crew_publish`, and `crew_read_pool` schemas](../../../docs/tool-catalog.md#deepseek-aidsh-tool-crew-member). Results are compact JSON projections of the underlying `ctx.crew` records with undefined-valued optional fields omitted.
+The generated [`crew_report`, `crew_start_work`, `crew_publish`, and `crew_read_pool` schemas](../../../docs/tool-catalog.md#deepseek-aidsh-tool-crew-member). The model-facing result stays a compact JSON projection of the underlying `ctx.crew` record (`output.render`), so ids stay exact for chaining into the next call. A capable UI without a dedicated crew card instead shows each call's `presentResult` — one short human-readable line (or, for `crew_read_pool`, one line per pool message) derived from the same canonical value via `output.presentationMeta`, never the raw JSON.
 
 #### Token effect
 

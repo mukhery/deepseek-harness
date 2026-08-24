@@ -321,6 +321,14 @@ export class CrewRuntime extends Service {
       )
     }
     return await this.transition(ticketId, ['in-review'], (ticket) => {
+      // Symmetric with requireAssignable's workspace check on assignTicket/reassignTicket: a
+      // reviewer's roster membership alone does not prove it belongs to this ticket's workspace.
+      if (ticket.workspaceId !== reviewer.workspaceId) {
+        throw new CrewAuthorityError(
+          `cannot verdict ticket '${ticketId}': reviewer '${reviewerSessionId}' belongs to workspace `
+          + `'${reviewer.workspaceId}', not the ticket's workspace '${ticket.workspaceId}'`,
+        )
+      }
       if (outcome === 'accept') {
         return {
           ...ticket,

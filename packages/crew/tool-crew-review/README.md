@@ -1,6 +1,6 @@
 # @deepseek-ai/dsh-tool-crew-review
 
-Model-facing `crew_verdict` tool over [`ctx.crew`](../crew/README.md) — the **sole** operation that can close a crew ticket. Mounted inside the `crew-director` preset (never host-global, for the same reason as `tool-crew-member`). The Director's own session technically sees it too; the real enforcement is `ctx.crew.verdict` itself checking the caller was hired into the `reviewer` role, not tool visibility (see [`ctx.crew`'s README](../crew/README.md)) — a hired `reviewer` child's `toolFilter` (set by `tool-crew-director`'s `crew_hire`) is what actually narrows this tool down to the intended caller in practice.
+Model-facing `crew_verdict` tool over [`ctx.crew`](../crew/README.md) — the **sole** operation that can close a crew ticket. Mounted inside the `crew-director` preset (never host-global, for the same reason as `tool-crew-member`). The Director's own session technically sees it too; the real enforcement is `ctx.crew.verdict` itself checking the caller was hired into the `reviewer` role AND belongs to the ticket's own workspace, not tool visibility (see [`ctx.crew`'s README](../crew/README.md)) — a hired `reviewer` child's `toolFilter` (set by `tool-crew-director`'s `crew_hire`) is what actually narrows this tool down to the intended caller in practice.
 
 ## `crew_verdict`
 
@@ -14,7 +14,7 @@ The tool description explicitly tells the model the assignee's own `crew_report`
 
 #### What the model sees
 
-The generated [`crew_verdict` schema](../../../docs/tool-catalog.md#deepseek-aidsh-tool-crew-review). The result is a compact JSON projection of the updated ticket record with undefined-valued optional fields omitted.
+The generated [`crew_verdict` schema](../../../docs/tool-catalog.md#deepseek-aidsh-tool-crew-review). The model-facing result stays a compact JSON projection of the updated ticket record (`output.render`), with undefined-valued optional fields omitted. A capable UI without a dedicated crew card instead shows `presentResult` — one human-readable line ("accepted"/"rejected" plus the rationale and, for an accepted engineering ticket, the PR url) derived from the same canonical value via `output.presentationMeta`, never the raw JSON.
 
 #### Token effect
 

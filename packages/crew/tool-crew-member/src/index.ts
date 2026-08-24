@@ -1,18 +1,19 @@
 /**
- * Model-facing `crew_report`, `crew_publish`, and `crew_read_pool` tools over
- * `ctx.crew`. Mounted as an ordinary deployment-level plugin: a hired crew
- * member's `toolFilter` (set at `crew_hire` time) decides which of these are
- * actually visible to it, not a separate preset composition.
+ * Model-facing `crew_report`, `crew_start_work`, `crew_publish`, and
+ * `crew_read_pool` tools over `ctx.crew`. Mounted as an ordinary
+ * deployment-level plugin: a hired crew member's `toolFilter` (set at
+ * `crew_hire` time) decides which of these are actually visible to it, not a
+ * separate preset composition.
  * @module @deepseek-ai/dsh-tool-crew-member
  */
 
 import type { Context } from '@deepseek-ai/cordis'
 import type { JsonValue } from '@deepseek-ai/dsh-session'
-import type { CrewMessageKind } from '@deepseek-ai/dsh-crew'
+import type { CrewMessageKind, CrewMessageRecord, CrewTicketRecord } from '@deepseek-ai/dsh-crew'
 import { CrewTicketId } from '@deepseek-ai/dsh-crew'
 import { HarnessError } from '@deepseek-ai/dsh-llm'
 import { defineTool } from '@deepseek-ai/dsh-tools'
-import type { GenericCallView, ToolRunContext } from '@deepseek-ai/dsh-tools'
+import type { GenericCallView, ToolResult, ToolResultView, ToolRunContext } from '@deepseek-ai/dsh-tools'
 import type {} from '@deepseek-ai/dsh-workspace'
 
 export const name = 'tool-crew-member'
@@ -49,6 +50,42 @@ function compact(value: Record<string, unknown>): Record<string, JsonValue> {
 const JSON_OUTPUT = {
   schema: { type: 'object', additionalProperties: true } as const,
   render: (_args: unknown, value: unknown) => [{ type: 'text' as const, text: JSON.stringify(value) }],
+  // Projects the same canonical value `render` serializes, so a UI's presentResult reads it back
+  // structured instead of re-parsing the model-facing JSON text.
+  presentationMeta: (_args: unknown, value: JsonValue) => value,
+}
+
+/** Render a reported ticket's new state as a human-readable line for a UI without a dedicated crew card. */
+function presentReportResult(_args: unknown, result: ToolResult): ToolResultView | undefined {
+  if (result.isError) return undefined
+  const ticket = result.meta as unknown as CrewTicketRecord
+  const text = ticket.status === 'in-review'
+    ? `Ticket "${ticket.title}" (${ticket.id}) submitted for review: ${ticket.summary}`
+    : `Ticket "${ticket.title}" (${ticket.id}) marked blocked: ${ticket.blockedReason}`
+  return { card: 'generic', content: [{ type: 'text', text }] }
+}
+
+/** Render a started ticket's new state as a human-readable line for a UI without a dedicated crew card. */
+function presentStartWorkResult(_args: unknown, result: ToolResult): ToolResultView | undefined {
+  if (result.isError) return undefined
+  const ticket = result.meta as unknown as CrewTicketRecord
+  return { card: 'generic', content: [{ type: 'text', text: `Ticket "${ticket.title}" (${ticket.id}) marked in-progress.` }] }
+}
+
+/** Render a published pool message as a human-readable line for a UI without a dedicated crew card. */
+function presentPublishResult(_args: unknown, result: ToolResult): ToolResultView | undefined {
+  if (result.isError) return undefined
+  const message = result.meta as unknown as CrewMessageRecord
+  return { card: 'generic', content: [{ type: 'text', text: `Published ${message.kind} "${message.topic}": ${message.body}` }] }
+}
+
+/** Render the message pool as a human-readable list for a UI without a dedicated crew card. */
+function presentReadPoolResult(_args: unknown, result: ToolResult): ToolResultView | undefined {
+  if (result.isError) return undefined
+  const { messages } = result.meta as unknown as { messages: CrewMessageRecord[] }
+  if (messages.length === 0) return { card: 'generic', content: [{ type: 'text', text: 'Crew pool: (no messages)' }] }
+  const lines = messages.map(m => `- [${m.kind}] ${m.topic} — ${m.from} (${m.createdAt}): ${m.body}`)
+  return { card: 'generic', content: [{ type: 'text', text: `Crew pool (${messages.length}):\n${lines.join('\n')}` }] }
 }
 
 /** Register the crew member tools. */
@@ -86,6 +123,7 @@ export function apply(ctx: Context): void {
       return compact(ticket)
     },
     presentCall: args => present('Report on ticket', 'other', args.ticket_id),
+    presentResult: presentReportResult,
   }))
 
   ctx.tools.register(defineTool({
@@ -113,6 +151,7 @@ export function apply(ctx: Context): void {
       return compact(message)
     },
     presentCall: args => present('Publish to crew pool', 'other', args.topic),
+    presentResult: presentPublishResult,
   }))
 
   ctx.tools.register(defineTool({
@@ -134,5 +173,25 @@ export function apply(ctx: Context): void {
       return { messages: messages.map(compact) }
     },
     presentCall: () => present('Read crew pool', 'read'),
+    presentResult: presentReadPoolResult,
+  }))
+
+  ctx.tools.register(defineTool({
+    name: 'crew_start_work',
+    description: 'Mark your assigned ticket as actively being worked (assigned -> in-progress), so the crew '
+      + 'board reflects real progress instead of an idle assignment. Optional — crew_report still works directly '
+      + 'from "assigned" — but call this when you begin so the Director and reviewer can see the difference '
+      + 'between "not started" and "in progress".',
+    parameters: {
+      ticket_id: { type: 'string', required: true, description: 'The ticket id you are starting work on.' },
+    },
+    output: JSON_OUTPUT,
+    async execute(args, exec) {
+      const { sessionId } = await callerContext(ctx, exec)
+      const ticket = await ctx.crew.startWork(CrewTicketId(args.ticket_id), sessionId)
+      return compact(ticket)
+    },
+    presentCall: args => present('Start ticket work', 'other', args.ticket_id),
+    presentResult: presentStartWorkResult,
   }))
 }

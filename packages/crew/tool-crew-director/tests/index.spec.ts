@@ -58,7 +58,7 @@ describe('tool-crew-director', () => {
     }
     expect(call.provider).toBe('spawn')
     expect(call.label).toBe('Researcher')
-    expect(call.request.toolFilter).toEqual({ allow: ['crew_report', 'crew_publish', 'crew_read_pool'] })
+    expect(call.request.toolFilter).toEqual({ allow: ['crew_report', 'crew_publish', 'crew_read_pool', 'crew_start_work'] })
     expect(crew.hire).toHaveBeenCalledWith({ workspaceId: workspace, memberSessionId: child, role: 'researcher', label: 'Researcher' })
     expect(result).toEqual({ memberSessionId: child, role: 'researcher', label: 'Researcher' })
   })
@@ -69,13 +69,13 @@ describe('tool-crew-director', () => {
     const strategistAllow = (subagents.startContinuable.mock.calls[0]![0] as {
       request: { toolFilter: { allow: string[] } }
     }).request.toolFilter.allow
-    expect(strategistAllow).toEqual(['crew_report', 'crew_publish', 'crew_read_pool', 'crew_open_ticket'])
+    expect(strategistAllow).toEqual(['crew_report', 'crew_publish', 'crew_read_pool', 'crew_open_ticket', 'crew_start_work'])
 
     await tools.get('crew_hire')!.execute({ role: 'engineer', label: 'Engineer' }, exec())
     const engineerAllow = (subagents.startContinuable.mock.calls[1]![0] as {
       request: { toolFilter: { allow: string[] } }
     }).request.toolFilter.allow
-    expect(engineerAllow).toEqual(['crew_report', 'crew_publish', 'crew_read_pool', 'bash'])
+    expect(engineerAllow).toEqual(['crew_report', 'crew_publish', 'crew_read_pool', 'crew_start_work', 'bash'])
   })
 
   it('crew_open_ticket forwards fields, with and without cited message ids', async () => {
@@ -144,5 +144,57 @@ describe('tool-crew-director', () => {
       .toMatchObject({ kind: 'other' })
     expect(tools.get('crew_board')!.presentCall!({})).toMatchObject({ kind: 'read' })
     expect(tools.get('crew_board')!.output.render({}, { roster: [] })).toEqual([{ type: 'text', text: '{"roster":[]}' }])
+    expect(tools.get('crew_board')!.output.presentationMeta!({}, { roster: [] })).toEqual({ roster: [] })
+  })
+
+  it('presents each completed call as a human-readable line, and falls back on error', () => {
+    const { tools } = harness()
+
+    expect(tools.get('crew_hire')!.presentResult!({ role: 'researcher', label: 'R' }, {
+      content: [], isError: false, meta: { role: 'researcher', label: 'R', memberSessionId: child },
+    })).toEqual({ card: 'generic', content: [{ type: 'text', text: `Hired researcher "R" (session ${child}).` }] })
+    expect(tools.get('crew_hire')!.presentResult!({ role: 'researcher', label: 'R' }, { content: [], isError: true }))
+      .toBeUndefined()
+
+    expect(tools.get('crew_open_ticket')!.presentResult!({ title: 'T', objective: 'O', role: 'researcher' }, {
+      content: [], isError: false, meta: { id: 't1', title: 'T', objective: 'O', role: 'researcher' },
+    })).toEqual({ card: 'generic', content: [{ type: 'text', text: 'Opened ticket "T" (t1) for researcher: O' }] })
+    expect(tools.get('crew_open_ticket')!.presentResult!({ title: 'T', objective: 'O', role: 'researcher' }, {
+      content: [], isError: true,
+    })).toBeUndefined()
+
+    expect(tools.get('crew_assign_ticket')!.presentResult!({ ticket_id: 't1', member_session_id: child }, {
+      content: [], isError: false, meta: { id: 't1', title: 'T', status: 'assigned', assigneeSessionId: child },
+    })).toEqual({
+      card: 'generic', content: [{ type: 'text', text: `Assigned ticket "T" (t1) to ${child} (status assigned).` }],
+    })
+    expect(tools.get('crew_assign_ticket')!.presentResult!({ ticket_id: 't1', member_session_id: child }, {
+      content: [], isError: true,
+    })).toBeUndefined()
+
+    expect(tools.get('crew_board')!.presentResult!({}, {
+      content: [], isError: false, meta: { roster: [], tickets: [] },
+    })).toEqual({
+      card: 'generic',
+      content: [{ type: 'text', text: 'Roster (0):\n(no members hired)\n\nTickets (0):\n(no tickets)' }],
+    })
+    expect(tools.get('crew_board')!.presentResult!({}, {
+      content: [], isError: false,
+      meta: {
+        roster: [{ memberSessionId: child, role: 'researcher', label: 'R' }],
+        tickets: [
+          { id: 't1', title: 'T', status: 'open', role: 'researcher' },
+          { id: 't2', title: 'T2', status: 'assigned', role: 'researcher', assigneeSessionId: child },
+        ],
+      },
+    })).toEqual({
+      card: 'generic',
+      content: [{
+        type: 'text',
+        text: `Roster (1):\n- researcher "R" — ${child}\n\nTickets (2):\n- [open] "T" (t1) role:researcher\n`
+          + `- [assigned] "T2" (t2) role:researcher assignee:${child}`,
+      }],
+    })
+    expect(tools.get('crew_board')!.presentResult!({}, { content: [], isError: true })).toBeUndefined()
   })
 })

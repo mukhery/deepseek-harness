@@ -56,5 +56,30 @@ describe('tool-crew-review', () => {
     expect(tools.get('crew_verdict')!.presentCall!({ ticket_id: 't1', outcome: 'accept', rationale: 'r' }))
       .toMatchObject({ kind: 'other', rawInput: 't1' })
     expect(tools.get('crew_verdict')!.output.render({}, { id: 't1' })).toEqual([{ type: 'text', text: '{"id":"t1"}' }])
+    expect(tools.get('crew_verdict')!.output.presentationMeta!({}, { id: 't1' })).toEqual({ id: 't1' })
+  })
+
+  it('presents a completed verdict as a human-readable line, and falls back on error', () => {
+    const { tools } = harness()
+    const args = { ticket_id: 't1', outcome: 'accept' as const, rationale: 'r' }
+    expect(tools.get('crew_verdict')!.presentResult!(args, {
+      content: [], isError: false,
+      meta: { id: 't1', title: 'Ship X', status: 'done', verdictRationale: 'looks good', prUrl: 'https://pr/1' },
+    })).toEqual({
+      card: 'generic', content: [{ type: 'text', text: 'Ticket "Ship X" (t1) accepted: looks good (PR: https://pr/1)' }],
+    })
+    expect(tools.get('crew_verdict')!.presentResult!(args, {
+      content: [], isError: false,
+      meta: { id: 't1', title: 'Ship X', status: 'done', verdictRationale: 'looks good' },
+    })).toEqual({
+      card: 'generic', content: [{ type: 'text', text: 'Ticket "Ship X" (t1) accepted: looks good' }],
+    })
+    expect(tools.get('crew_verdict')!.presentResult!(args, {
+      content: [], isError: false,
+      meta: { id: 't1', title: 'Ship X', status: 'assigned', verdictRationale: 'missing tests' },
+    })).toEqual({
+      card: 'generic', content: [{ type: 'text', text: 'Ticket "Ship X" (t1) rejected, returned to assignee: missing tests' }],
+    })
+    expect(tools.get('crew_verdict')!.presentResult!(args, { content: [], isError: true })).toBeUndefined()
   })
 })
